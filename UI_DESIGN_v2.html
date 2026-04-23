@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Withdraw App — UI Design v2</title>
+  <style>
+    :root {
+      --bg: #0A0A0A; --panel: #111111; --panel-2: #1A1A1A; --line: #262626; --line-2: #333333;
+      --text: #E5E5E5; --muted: #A3A3A3; --muted-2: #737373;
+      --blue: #4F46E5; --blue-light: #3B82F6; --green: #22C55E;
+      --red: #EF4444; --yellow: #F59E0B; --orange: #F97316;
+      --teal: #14B8A6; --purple: #9333EA;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; font-size: 14px; line-height: 1.5; }
+    .app { display: flex; min-height: 100vh; }
+    .sidebar { width: 220px; border-right: 1px solid var(--line); padding: 16px; display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+    main { flex: 1; padding: 28px; overflow: auto; max-width: 900px; }
+    .brand { font-size: 22px; font-weight: 700; padding: 4px 0 20px; }
+    .spacer { flex: 1; }
+    .nav-btn { display: block; width: 100%; text-align: left; padding: 10px 12px; border-radius: 10px; border: none; background: transparent; color: var(--muted); font-size: 14px; cursor: pointer; transition: all 0.15s; }
+    .nav-btn:hover { background: var(--panel-2); color: var(--text); }
+    .nav-btn.active { background: #1E1E1E; color: var(--text); }
+    h2 { font-size: 20px; font-weight: 600; margin-bottom: 16px; }
+    h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .muted { color: var(--muted); }
+    .muted-2 { color: var(--muted-2); font-size: 12px; }
+    .mono { font-family: ui-monospace, monospace; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+    .card-list { display: flex; flex-direction: column; gap: 12px; }
+    .card-row { display: flex; justify-content: space-between; align-items: center; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; border-radius: 10px; border: none; background: var(--blue); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .btn:hover { background: #4338CA; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-ghost { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line-2); background: transparent; color: var(--text); font-size: 13px; cursor: pointer; }
+    .btn-ghost:hover { background: var(--panel-2); }
+    .btn-danger { background: #450A0A; border: 1px solid #7F1D1D; color: #FCA5A5; }
+    .btn-sm { padding: 6px 10px; font-size: 12px; }
+    .btn-full { width: 100%; justify-content: center; }
+    .form-group { display: grid; gap: 6px; margin-bottom: 16px; }
+    .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    label { font-size: 12px; color: var(--muted); font-weight: 500; }
+    input, select, textarea { width: 100%; background: #0E0E0E; border: 1px solid var(--line-2); border-radius: 8px; padding: 10px 12px; font-size: 14px; color: var(--text); }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--blue); }
+    textarea { resize: vertical; font-family: ui-monospace, monospace; font-size: 12px; }
+    .input-hint { font-size: 11px; color: var(--muted-2); margin-top: 4px; }
+    .pill-row { display: flex; flex-wrap: wrap; gap: 10px; }
+    .pill { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--panel-2); font-size: 13px; cursor: pointer; transition: all 0.15s; }
+    .pill:hover { border-color: var(--muted); }
+    .pill.selected { border-color: var(--blue-light); background: #0F172A; }
+    .ico { width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+    .ico-sm { width: 26px; height: 26px; font-size: 9px; }
+    .ico-evm { background: var(--blue); color: #fff; }
+    .ico-sol { background: var(--purple); color: #fff; }
+    .ico-bn { background: #EAB308; color: #000; }
+    .ico-by { background: var(--orange); color: #fff; }
+    .ico-gt { background: var(--blue-light); color: #fff; }
+    .ico-mx { background: var(--green); color: #fff; }
+    .ico-kc { background: var(--teal); color: #fff; }
+    .chain-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .c-eth { background: var(--blue); }
+    .c-bsc { background: var(--yellow); }
+    .c-poly { background: var(--purple); }
+    .c-arb { background: var(--blue-light); }
+    .c-base { background: #60A5FA; }
+    .c-opt { background: var(--red); }
+    .balance-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 8px; margin-top: 12px; }
+    .balance-chip { background: #141414; border: 1px solid #252525; border-radius: 10px; padding: 10px 8px; text-align: center; }
+    .balance-chip b { display: block; font-size: 12px; margin-bottom: 2px; }
+    .balance-chip span { font-size: 11px; color: var(--muted-2); }
+    .badge { display: inline-flex; align-items: center; border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: 500; }
+    .badge-blue { background: #172554; color: #93C5FD; }
+    .badge-green { background: #052E16; color: #86EFAC; }
+    .badge-red { background: #450A0A; color: #FCA5A5; }
+    .badge-yellow { background: #422006; color: #FCD34D; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .dot-g { background: var(--green); }
+    .dot-r { background: var(--red); }
+    .dot-y { background: var(--yellow); }
+    .page-section { margin-bottom: 32px; }
+    .auth-container { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .auth-box { width: 100%; max-width: 400px; }
+    .auth-icon { width: 72px; height: 72px; margin: 0 auto 24px; background: var(--panel); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; }
+    .auth-title { text-align: center; font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+    .auth-desc { text-align: center; color: var(--muted); font-size: 13px; margin-bottom: 24px; line-height: 1.6; }
+    .mode-toggle { display: flex; gap: 8px; margin-bottom: 20px; }
+    .mode-btn { padding: 10px 16px; border-radius: 10px; border: 1px solid var(--line-2); background: transparent; color: var(--text); font-size: 14px; cursor: pointer; }
+    .mode-btn.active { background: #1E1E1E; }
+    .balance-selector { background: #0D0D0D; border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin: 16px 0; }
+    .balance-selector-label { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+    .deposit-box { background: #0D1117; border: 1px solid #1E3A5F; border-radius: 12px; padding: 14px; margin-top: 16px; }
+    .deposit-box .label { color: #7DD3FC; margin-bottom: 6px; font-size: 12px; }
+    .deposit-box .verified { color: var(--green); font-size: 12px; margin-top: 8px; }
+    .history-item { margin-bottom: 12px; }
+    .history-row { display: flex; justify-content: space-between; align-items: flex-start; }
+    .history-meta { font-size: 11px; color: var(--muted-2); margin-top: 4px; }
+    .history-tx { font-size: 11px; font-family: ui-monospace, monospace; color: var(--muted); margin-top: 6px; word-break: break-all; }
+    .rpc-item { margin-bottom: 10px; }
+    .rpc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+    .rpc-status { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-top: 6px; }
+    .rpc-override { background: #0E0E0E; border: 1px solid var(--line-2); border-radius: 8px; padding: 10px; margin-top: 10px; display: flex; gap: 8px; }
+    .hint-box { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px; font-size: 12px; color: var(--muted); display: flex; align-items: flex-start; gap: 8px; }
+  </style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="brand">Withdraw</div>
+  <button class="nav-btn active" onclick="showPage('dashboard')">Dashboard</button>
+  <button class="nav-btn" onclick="showPage('wallets')">Wallets</button>
+  <button class="nav-btn" onclick="showPage('exchanges')">Exchanges</button>
+  <button class="nav-btn" onclick="showPage('rpcs')">RPCs</button>
+  <button class="nav-btn" onclick="showPage('transfer')">Transfer</button>
+  <button class="nav-btn" onclick="showPage('history')">History</button>
+  <div class="spacer"></div>
+  <button class="btn-ghost btn-sm">🔒 Lock</button>
+</aside>
+
+<!-- Main Content -->
+<main>
+  <!-- DASHBOARD -->
+  <div id="page-dashboard" class="page">
+    <div class="section-header">
+      <h2>Dashboard</h2>
+      <span class="muted-2">Auto-refresh: Wallets (30s) • Exchanges (10s)</span>
+    </div>
+    <div class="page-section">
+      <h3>Wallets</h3>
+      <div class="card-list">
+        <div class="card">
+          <div class="card-row">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span class="ico ico-evm">EVM</span>
+              <div>
+                <div style="font-weight:600;">Rabby Main Wallet</div>
+                <div class="mono muted-2" style="font-size:11px;margin-top:2px;">0xf600...d28C</div>
+              </div>
+            </div>
+          </div>
+          <div class="balance-grid">
+            <div class="balance-chip"><b>ETH</b><span>0.1864</span></div>
+            <div class="balance-chip"><b>USDT</b><span>214.23</span></div>
+            <div class="balance-chip"><b>USDC</b><span>53.01</span></div>
+            <div class="balance-chip"><b>ARB</b><span>18.89</span></div>
+            <div class="balance-chip"><b>MATIC</b><span>12.50</span></div>
+            <div class="balance-chip" style="background:transparent;border:1px dashed var(--line-2);"><b style="color:var(--muted)">+5</b></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-row">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span class="ico ico-sol">SOL</span>
+              <div>
+                <div style="font-weight:600;">Solana Trading</div>
+                <div class="mono muted-2" style="font-size:11px;margin-top:2px;">7X3kRmZ...mNpQ</div>
+              </div>
+            </div>
+          </div>
+          <div class="balance-grid">
+            <div class="balance-chip"><b>SOL</b><span>12.55</span></div>
+            <div class="balance-chip" style="background:transparent;border:1px dashed var(--line-2);"><b style="color:var(--muted)">+2</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="page-section">
+      <h3>Exchanges</h3>
+      <div class="card-list">
+        <div class="card">
+          <div class="card-row">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span class="ico ico-gt">GT</span>
+              <div>
+                <div style="font-weight:600;">Gate.io - Main</div>
+                <div class="muted-2" style="font-size:11px;margin-top:2px;">gate</div>
+              </div>
+            </div>
+          </div>
+          <div class="balance-grid">
+            <div class="balance-chip"><b>USDT</b><span>1,200.00</span></div>
+            <div class="balance-chip"><b>ETH</b><span>1.50</span></div>
+            <div class="balance-chip"><b>SOL</b><span>22.31</span></div>
+            <div class="balance-chip"><b>BTC</b><span>0.0180</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-row">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span class="ico ico-bn">BN</span>
+              <div>
+                <div style="font-weight:600;">Binance - Main</div>
+                <div class="muted-2" style="font-size:11px;margin-top:2px;">binance</div>
+              </div>
+            </div>
+          </div>
+          <div class="balance-grid">
+            <div class="balance-chip"><b>USDT</b><span>8,400.00</span></div>
+            <div class="balance-chip"><b>BNB</b><span>4.83</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WALLETS PAGE -->
+  <div id="page-wallets" class="page" style="display:none;">
+    <div class="section-header">
+      <h2>Wallets</h2>
+      <button class="btn">+ Add New</button>
+    </div>
+    <div class="page-section">
+      <div class="card">
+        <h3 style="margin-bottom:16px;">Add Wallet</h3>
+        <div class="form-row-2">
+          <div class="form-group">
+            <label>Kind</label>
+            <select><option value="evm">EVM (Ethereum, BSC, Polygon, etc.)</option><option value="solana">Solana</option></select>
+          </div>
+          <div class="form-group">
+            <label>Label</label>
+            <input type="text" placeholder="Main Trading Wallet">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Private Key</label>
+          <textarea rows="3" placeholder="0xabc123... (hex, with or without 0x)"></textarea>
+        </div>
+        <div class="hint-box">Encrypted with your master password before being stored.</div>
+        <div style="margin-top:16px;"><button class="btn">Add Wallet</button></div>
+      </div>
+    </div>
+    <div class="page-section">
+      <h3>My Wallets</h3>
+      <div class="card-list">
+        <div class="card card-row">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="ico ico-evm ico-sm">EVM</span>
+            <div>
+              <div style="font-weight:600;">Rabby Main Wallet</div>
+              <div class="mono muted-2" style="font-size:11px;margin-top:2px;">evm • 0xf600...d28C</div>
+            </div>
+          </div>
+          <button class="btn-ghost btn-sm btn-danger">Remove</button>
+        </div>
+        <div class="card card-row">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="ico ico-sol ico-sm">SOL</span>
+            <div>
+              <div style="font-weight:600;">Solana Trading</div>
+              <div class="mono muted-2" style="font-size:11px;margin-top:2px;">solana • 7X3kRmZ...mNpQ</div>
+            </div>
+          </div>
+          <button class="btn-ghost btn-sm btn-danger">Remove</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EXCHANGES PAGE -->
+  <div id="page-exchanges" class="page" style="display:none;">
+    <div class="section-header">
+      <h2>Exchanges</h2>
+      <button class="btn">+ Add New</button>
+    </div>
+    <div class="page-section">
+      <div class="card">
+        <h3 style="margin-bottom:16px;">Add Exchange</h3>
+        <div class="form-row-2">
+          <div class="form-group">
+            <label>Exchange</label>
+            <select><option>Binance</option><option>Bybit</option><option>Gate.io</option><option>MEXC</option><option>KuCoin</option></select>
+          </div>
+          <div class="form-group">
+            <label>Label</label>
+            <input type="text" placeholder="Binance Main">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>API Key</label>
+          <input type="text" class="mono" placeholder="abc123...def456...">
+        </div>
+        <div class="form-group">
+          <label>API Secret</label>
+          <input type="password" class="mono" placeholder="•••••••••••••••••">
+        </div>
+        <div class="hint-box">Grant only withdrawal-to-whitelisted-addresses permission for security.</div>
+        <div style="margin-top:16px;"><button class="btn">Add Exchange</button></div>
+      </div>
+    </div>
+    <div class="page-section">
+      <h3>Connected Exchanges</h3>
+      <div class="card-list">
+        <div class="card card-row">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="ico ico-gt ico-sm">GT</span>
+            <div><div style="font-weight:600;">Gate.io - Main</div><div class="muted-2" style="font-size:11px;margin-top:2px;">gate</div></div>
+          </div>
+          <button class="btn-ghost btn-sm btn-danger">Remove</button>
+        </div>
+        <div class="card card-row">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="ico ico-bn ico-sm">BN</span>
+            <div><div style="font-weight:600;">Binance - Main</div><div class="muted-2" style="font-size:11px;margin-top:2px;">binance</div></div>
+          </div>
+          <button class="btn-ghost btn-sm btn-danger">Remove</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RPCs PAGE -->
+  <div id="page-rpcs" class="page" style="display:none;">
+    <h2>RPC Nodes</h2>
+    <div class="page-section">
+      <h3 style="color:var(--muted);">Default RPCs</h3>
+      <div class="card-list">
+        <div class="card">
+          <div class="rpc-header">
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;font-weight:600;">ethereum <span class="badge badge-blue">overridden</span></div>
+              <div style="color:var(--blue-light);font-size:12px;margin-top:4px;">https://eth.llamarpc.com</div>
+              <div class="muted-2" style="font-size:11px;margin-top:2px;">default: https://cloudflare-eth.com</div>
+              <div class="rpc-status"><span class="dot dot-g"></span> 36ms</div>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button class="btn-ghost btn-sm" style="color:var(--red);">Reset</button>
+              <button class="btn-ghost btn-sm">Override</button>
+            </div>
+          </div>
+          <div class="rpc-override">
+            <input type="text" class="mono" style="flex:1;font-size:12px;" value="https://eth.llamarpc.com">
+            <button class="btn btn-sm">Save</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="rpc-header">
+            <div>
+              <span style="font-weight:600;">bsc</span>
+              <div style="color:var(--muted);font-size:12px;margin-top:4px;">https://binance.llamarpc.com</div>
+              <div class="rpc-status"><span class="dot dot-r"></span> Unreachable</div>
+            </div>
+            <button class="btn-ghost btn-sm">Override</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="rpc-header">
+            <div>
+              <span style="font-weight:600;">polygon</span>
+              <div style="color:var(--muted);font-size:12px;margin-top:4px;">https://polygon-rpc.com</div>
+              <div class="rpc-status"><span class="dot dot-r"></span> Unreachable</div>
+            </div>
+            <button class="btn-ghost btn-sm">Override</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="rpc-header">
+            <div>
+              <span style="font-weight:600;">arbitrum</span>
+              <div style="color:var(--muted);font-size:12px;margin-top:4px;">https://arb1.arbitrum.io/rpc</div>
+              <div class="rpc-status"><span class="dot dot-g"></span> 88ms</div>
+            </div>
+            <button class="btn-ghost btn-sm">Override</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="rpc-header">
+            <div>
+              <span style="font-weight:600;">base</span>
+              <div style="color:var(--muted);font-size:12px;margin-top:4px;">https://mainnet.base.org</div>
+              <div class="rpc-status"><span class="dot dot-g"></span> 175ms</div>
+            </div>
+            <button class="btn-ghost btn-sm">Override</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="rpc-header">
+            <div>
+              <span style="font-weight:600;">optimism</span>
+              <div style="color:var(--muted);font-size:12px;margin-top:4px;">https://mainnet.optimism.io</div>
+              <div class="rpc-status"><span class="dot dot-g"></span> 102ms</div>
+            </div>
+            <button class="btn-ghost btn-sm">Override</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="page-section">
+      <h3 style="color:var(--muted);">Custom RPCs</h3>
+      <div class="muted-2" style="margin-bottom:16px;">No custom RPCs added yet.</div>
+      <div class="card">
+        <h3 style="margin-bottom:16px;">Add Custom RPC</h3>
+        <div class="form-row-2">
+          <div class="form-group">
+            <label>Chain Slug</label>
+            <input type="text" placeholder="mychain">
+          </div>
+          <div class="form-group">
+            <label>Chain ID</label>
+            <input type="number" placeholder="9999">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Label</label>
+          <input type="text" placeholder="My Custom Chain">
+        </div>
+        <div class="form-group">
+          <label>RPC URL</label>
+          <input type="text" class="mono" placeholder="https://rpc.mychain.io">
+        </div>
+        <button class="btn btn-full">Add RPC</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRANSFER PAGE -->
+  <div id="page-transfer" class="page" style="display:none;">
+    <h2>Transfer</h2>
+    <div class="mode-toggle">
+      <button class="mode-btn active" onclick="switchMode(this)">Wallet → CEX</button>
+      <button class="mode-btn" onclick="switchMode(this)">CEX → CEX</button>
+    </div>
+    <div class="card">
+      <div class="form-group">
+        <label>From Wallet</label>
+        <div class="pill-row">
+          <div class="pill selected" onclick="selectPill(this)">
+            <span class="ico ico-evm ico-sm">EVM</span>
+            <div><div style="font-size:13px;font-weight:600;">Rabby Main</div><div class="muted-2" style="font-size:10px;">evm</div></div>
+          </div>
+          <div class="pill" onclick="selectPill(this)">
+            <span class="ico ico-evm ico-sm">EVM</span>
+            <div><div style="font-size:13px;font-weight:600;">Hot Wallet</div><div class="muted-2" style="font-size:10px;">evm</div></div>
+          </div>
+          <div class="pill" onclick="selectPill(this)">
+            <span class="ico ico-sol ico-sm">SOL</span>
+            <div><div style="font-size:13px;font-weight:600;">Sol Trading</div><div class="muted-2" style="font-size:10px;">solana</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>EVM Chain</label>
+        <div class="pill-row">
+          <div class="pill selected" onclick="selectPill(this)"><span class="chain-dot c-eth"></span>Ethereum</div>
+          <div class="pill" onclick="selectPill(this)"><span class="chain-dot c-bsc"></span>BSC</div>
+          <div class="pill" onclick="selectPill(this)"><span class="chain-dot c-poly"></span>Polygon</div>
+          <div class="pill" onclick="selectPill(this)"><span class="chain-dot c-arb"></span>Arbitrum</div>
+          <div class="pill" onclick="selectPill(this)"><span class="chain-dot c-base"></span>Base</div>
+          <div class="pill" onclick="selectPill(this)"><span class="chain-dot c-opt"></span>Optimism</div>
+        </div>
+      </div>
+      <div class="balance-selector">
+        <div class="balance-selector-label">Select Asset from Balance</div>
+        <div class="pill-row">
+          <div class="pill selected" onclick="selectPill(this)">USDT <span class="muted-2" style="margin-left:4px;">214.23</span></div>
+          <div class="pill" onclick="selectPill(this)">USDC <span class="muted-2" style="margin-left:4px;">53.01</span></div>
+          <div class="pill" onclick="selectPill(this)">ETH <span class="muted-2" style="margin-left:4px;">0.1864</span></div>
+          <div class="pill" onclick="selectPill(this)">ARB <span class="muted-2" style="margin-left:4px;">18.89</span></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>To Exchange</label>
+        <div class="pill-row">
+          <div class="pill" onclick="selectPill(this)">
+            <span class="ico ico-gt ico-sm">GT</span>
+            <div><div style="font-size:13px;font-weight:600;">Gate.io</div><div class="muted-2" style="font-size:10px;">gate</div></div>
+          </div>
+          <div class="pill selected" onclick="selectPill(this)">
+            <span class="ico ico-bn ico-sm">BN</span>
+            <div><div style="font-size:13px;font-weight:600;">Binance</div><div class="muted-2" style="font-size:10px;">binance</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label>Asset</label>
+          <input type="text" value="USDT">
+        </div>
+        <div class="form-group">
+          <label>Network (CEX)</label>
+          <select><option>ERC20</option><option>TRC20</option><option>BEP20</option></select>
+        </div>
+        <div class="form-group">
+          <label>Amount</label>
+          <input type="text" value="150">
+        </div>
+      </div>
+      <details style="margin-top:16px;">
+        <summary class="muted-2" style="cursor:pointer;padding:8px 0;">▼ Advanced (token contract)</summary>
+        <div class="form-group" style="margin-top:12px;">
+          <label>Token Contract Address</label>
+          <input type="text" class="mono" placeholder="0xdAC17F958D2ee523a2206246992...">
+        </div>
+      </details>
+      <button class="btn btn-full" style="margin-top:20px;">Submit Transfer</button>
+    </div>
+  </div>
+
+  <!-- HISTORY PAGE -->
+  <div id="page-history" class="page" style="display:none;">
+    <div class="section-header">
+      <h2>History</h2>
+      <button class="btn-ghost btn-sm">📥 Export CSV</button>
+    </div>
+    <div class="pill-row" style="margin-bottom:20px;">
+      <select style="width:auto;"><option>All Types</option><option>Wallet → CEX</option><option>CEX → CEX</option></select>
+      <select style="width:auto;"><option>All Assets</option><option>USDT</option><option>ETH</option><option>SOL</option></select>
+      <select style="width:auto;"><option>All Status</option><option>Success</option><option>Failed</option><option>Submitted</option></select>
+    </div>
+    <div class="card-list">
+      <div class="card history-item">
+        <div class="history-row">
+          <div>
+            <div style="font-weight:600;">GateVika → BinanceMain</div>
+            <div class="history-meta">500 USDT • ERC20 • Apr 23, 2026 00:14</div>
+          </div>
+          <span class="badge badge-green">✓ Done</span>
+        </div>
+        <div class="history-tx">0xabc123def456789...000</div>
+      </div>
+      <div class="card history-item">
+        <div class="history-row">
+          <div>
+            <div style="font-weight:600;">Rabby1 → GateVika</div>
+            <div class="history-meta">214.23 USDT • ERC20 • Apr 22, 2026 23:57</div>
+          </div>
+          <span class="badge badge-green">✓ Done</span>
+        </div>
+        <div class="history-tx">0x9f32a1bcdef...</div>
+      </div>
+      <div class="card history-item">
+        <div class="history-row">
+          <div>
+            <div style="font-weight:600;">GateVika → BinanceMain</div>
+            <div class="history-meta">100 ETH • ERC20 • Apr 21, 2026 18:02</div>
+          </div>
+          <span class="badge badge-red">✗ Failed</span>
+        </div>
+        <div class="history-tx" style="color:var(--red);">Insufficient balance</div>
+      </div>
+      <div class="card history-item">
+        <div class="history-row">
+          <div>
+            <div style="font-weight:600;">SolHot1 → GateVika</div>
+            <div class="history-meta">10 SOL • SOL • Apr 20, 2026 11:30</div>
+          </div>
+          <span class="badge badge-yellow">⏳ Submitted</span>
+        </div>
+        <div class="history-tx">5Cjk7...xZ9</div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:center;align-items:center;gap:16px;margin-top:24px;">
+      <button class="btn-ghost btn-sm" disabled>◀ Previous</button>
+      <span class="muted-2">Page 1 of 5</span>
+      <button class="btn-ghost btn-sm">Next ▶</button>
+    </div>
+  </div>
+</main>
+</div>
+
+<script>
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+  document.getElementById('page-' + id).style.display = 'block';
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    if (b.textContent.toLowerCase().includes(id)) b.classList.add('active');
+  });
+}
+
+function selectPill(el) {
+  var parent = el.parentElement;
+  parent.querySelectorAll('.pill').forEach(p => p.classList.remove('selected'));
+  el.classList.add('selected');
+}
+function switchMode(btn) {
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>
