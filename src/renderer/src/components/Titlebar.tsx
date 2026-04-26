@@ -28,7 +28,7 @@ export function Titlebar({ unlocked, onLock, onOpenSettings, current }: Props) {
 
       <div className="flex-1" />
 
-      <div className="no-drag flex items-center gap-1 pr-3">
+      <div className={cn('no-drag flex items-center gap-1', isMac ? 'pr-3' : 'pr-36')}>
         <StatusPill unlocked={unlocked} />
         <button
           onClick={onOpenSettings}
