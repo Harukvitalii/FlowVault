@@ -87,6 +87,8 @@ function obj(v: unknown): Record<string, unknown> {
   return v as Record<string, unknown>
 }
 
+let mainWindow: BrowserWindow | null = null
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1280,
@@ -106,6 +108,11 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: true
     }
+  })
+
+  mainWindow = win
+  win.on('closed', () => {
+    if (mainWindow === win) mainWindow = null
   })
 
   win.on('ready-to-show', () => {
@@ -131,6 +138,17 @@ function createWindow() {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 }
+
+if (!app.requestSingleInstanceLock()) {
+  app.exit(0)
+}
+
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
+  }
+})
 
 app.whenReady().then(async () => {
   // Load on-disk caches (networks + deposit addresses) so first session-clicks
