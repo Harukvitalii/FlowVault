@@ -1,45 +1,339 @@
-import { app, BrowserWindow, shell } from "electron";
-import { join } from "path";
-import { fileURLToPath } from "url";
-import { registerIpc } from "./ipc.js";
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { join } from 'node:path'
+import {
+  addWallet,
+  changeMasterKey,
+  createVault,
+  listExchanges,
+  listRpcs,
+  listWallets,
+  lockVault,
+  removeExchange,
+  removeWallet,
+  saveRpcs,
+  unlockVault,
+  upsertExchange,
+  vaultState,
+  wipeVault
+} from './vault'
+import {
+  detectChain,
+  pingMany,
+  pingRpc,
+  startBackgroundPinger,
+  stopBackgroundPinger
+} from './rpc'
+import {
+  fetchWithdrawalStatus,
+  getBalances,
+  getClient,
+  getDepositAddresses,
+  getDepositAddressesForPairs,
+  getNetworksForCoin,
+  getWithdrawNetworks,
+  invalidateAllClients,
+  invalidateClient,
+  preflightCexWithdraw,
+  submitWithdraw,
+  testConnection,
+  transferInternal,
+  warmup
+} from './exchanges'
+import { getPrefs, savePrefs } from './prefs'
+import {
+  list as listDeposits,
+  setClientGetter,
+  startPoller as startDepositPoller,
+  stopPoller as stopDepositPoller,
+  wipeDeposits
+} from './deposits'
+import { checkEvmStatus, preflightEvmSend, submitEvmSend } from './evm-send'
+import { loadFromDisk, wipeDiskCache } from './cache-store'
+import { getEvmWalletBalances } from './evm'
+import {
+  clear as clearWithdrawals,
+  list as listWithdrawals,
+  remove as removeWithdrawal,
+  setStatusFetcher,
+  startPoller as startWithdrawalsPoller,
+  wipeHistory
+} from './withdrawals'
+import type {
+  CoinNetworkPair,
+  EvmSendInput,
+  InternalTransferInput,
+  UserPrefs,
+  WithdrawInput
+} from '../shared/types'
+import type {
+  ExchangeAccountInput,
+  RpcEntry,
+  WalletInput
+} from '../shared/types'
 
-const __dirname = fileURLToPath(new URL(".", import.meta.url));
+const isDev = !!process.env['ELECTRON_RENDERER_URL']
+
+/** Lightweight runtime guard — ensures a value is a non-empty string. */
+function str(v: unknown): string {
+  if (typeof v !== 'string' || !v) throw new Error('expected non-empty string')
+  return v
+}
+function num(v: unknown): number {
+  if (typeof v !== 'number' || !Number.isFinite(v)) throw new Error('expected finite number')
+  return v
+}
+function obj(v: unknown): Record<string, unknown> {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('expected object')
+  return v as Record<string, unknown>
+}
 
 function createWindow() {
   const win = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: 1280,
+    height: 820,
+    minWidth: 980,
+    minHeight: 640,
     show: false,
-    autoHideMenuBar: true,
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
+    titleBarOverlay:
+      process.platform === 'win32'
+        ? { color: '#061512', symbolColor: '#F0FDF4', height: 40 }
+        : undefined,
+    backgroundColor: '#061512',
     webPreferences: {
-      preload: join(__dirname, "../preload/index.mjs"),
+      preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
-    },
-  });
+      sandbox: true
+    }
+  })
 
-  win.on("ready-to-show", () => win.show());
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
-    return { action: "deny" };
-  });
+  win.on('ready-to-show', () => {
+    win.show()
+    if (isDev) win.webContents.openDevTools({ mode: 'detach' })
+  })
 
-  if (process.env.ELECTRON_RENDERER_URL) {
-    win.loadURL(process.env.ELECTRON_RENDERER_URL);
+  win.webContents.setWindowOpenHandler((details) => {
+    if (/^https?:\/\//i.test(details.url)) {
+      shell.openExternal(details.url)
+    }
+    return { action: 'deny' }
+  })
+
+  // Fix #6: block all renderer navigation after initial load.
+  win.webContents.on('will-navigate', (event) => {
+    event.preventDefault()
+  })
+
+  if (isDev) {
+    win.loadURL(process.env['ELECTRON_RENDERER_URL']!)
   } else {
-    win.loadFile(join(__dirname, "../renderer/index.html"));
+    win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 }
 
-app.whenReady().then(() => {
-  registerIpc();
-  createWindow();
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
-});
+app.whenReady().then(async () => {
+  // Load on-disk caches (networks + deposit addresses) so first session-clicks
+  // don't hit the network.
+  await loadFromDisk()
+  startBackgroundPinger()
+  setStatusFetcher(async (rec) => {
+    if (rec.kind === 'evm') return checkEvmStatus(rec)
+    if (!rec.exchangeAccountId || !rec.exchangeTxId) return null
+    return fetchWithdrawalStatus(
+      rec.exchangeAccountId,
+      rec.exchangeTxId,
+      rec.coin
+    )
+  })
+  startWithdrawalsPoller()
+  setClientGetter(getClient)
+  startDepositPoller()
 
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
-});
+  // Vault lifecycle
+  ipcMain.handle('vault:state', () => vaultState())
+  ipcMain.handle('vault:create', (_e, masterKey: unknown) =>
+    createVault(str(masterKey))
+  )
+  ipcMain.handle('vault:unlock', (_e, masterKey: unknown) =>
+    unlockVault(str(masterKey))
+  )
+  ipcMain.handle('vault:lock', () => {
+    invalidateAllClients()
+    stopBackgroundPinger()
+    stopDepositPoller()
+    return lockVault()
+  })
+  ipcMain.handle(
+    'vault:changeMasterKey',
+    (_e, oldKey: unknown, newKey: unknown) => changeMasterKey(str(oldKey), str(newKey))
+  )
+  ipcMain.handle('vault:wipe', async () => {
+    invalidateAllClients()
+    stopBackgroundPinger()
+    stopDepositPoller()
+    await Promise.all([wipeHistory(), wipeDiskCache(), wipeDeposits()])
+    return wipeVault()
+  })
+
+  // Exchanges
+  ipcMain.handle('exchanges:list', () => listExchanges())
+  ipcMain.handle('exchanges:upsert', async (_e, input: unknown) => {
+    const o = obj(input)
+    const validated: ExchangeAccountInput = {
+      exchange: str(o.exchange) as ExchangeAccountInput['exchange'],
+      label: str(o.label),
+      apiKey: str(o.apiKey),
+      secret: str(o.secret),
+      passphrase: typeof o.passphrase === 'string' ? o.passphrase : undefined,
+      accountId: typeof o.accountId === 'string' ? o.accountId : undefined
+    }
+    const r = await upsertExchange(validated)
+    if (r.ok && r.accountId) invalidateClient(r.accountId)
+    return r
+  })
+  ipcMain.handle('exchanges:remove', async (_e, accountId: unknown) => {
+    invalidateClient(str(accountId))
+    return removeExchange(str(accountId))
+  })
+  ipcMain.handle('exchanges:getBalances', (_e, accountId: unknown) =>
+    getBalances(str(accountId))
+  )
+  ipcMain.handle(
+    'exchanges:getNetworks',
+    (_e, accountId: unknown, coin: unknown) => getNetworksForCoin(str(accountId), str(coin))
+  )
+  ipcMain.handle('exchanges:getWithdrawNetworks', (_e, accountId: unknown) =>
+    getWithdrawNetworks(str(accountId))
+  )
+  ipcMain.handle(
+    'exchanges:getDepositAddressesForPairs',
+    (_e, accountId: unknown, pairs: unknown) => {
+      if (!Array.isArray(pairs)) throw new Error('expected array')
+      return getDepositAddressesForPairs(str(accountId), pairs as CoinNetworkPair[])
+    }
+  )
+  ipcMain.handle('exchanges:test', (_e, accountId: unknown) =>
+    testConnection(str(accountId))
+  )
+  ipcMain.handle('exchanges:warmup', () => warmup())
+  ipcMain.handle('exchanges:withdraw', (_e, input: unknown) => {
+    const o = obj(input)
+    return submitWithdraw({
+      accountId: str(o.accountId),
+      coin: str(o.coin),
+      network: str(o.network),
+      amount: num(o.amount),
+      address: str(o.address),
+      tag: typeof o.tag === 'string' ? o.tag : undefined,
+      destLabel: typeof o.destLabel === 'string' ? o.destLabel : undefined
+    })
+  })
+  ipcMain.handle(
+    'exchanges:transfer',
+    (_e, input: unknown) => {
+      const o = obj(input)
+      return transferInternal({
+        accountId: str(o.accountId),
+        coin: str(o.coin),
+        amount: num(o.amount),
+        fromType: str(o.fromType),
+        toType: str(o.toType)
+      })
+    }
+  )
+  ipcMain.handle('exchanges:preflight', (_e, input: unknown) => {
+    const o = obj(input)
+    return preflightCexWithdraw({
+      accountId: str(o.accountId),
+      coin: str(o.coin),
+      network: str(o.network),
+      amount: num(o.amount),
+      address: str(o.address),
+      tag: typeof o.tag === 'string' ? o.tag : undefined
+    })
+  })
+
+  // EVM on-chain send
+  ipcMain.handle('evm:preflight', (_e, input: unknown) => {
+    const o = obj(input)
+    return preflightEvmSend({
+      walletId: str(o.walletId),
+      coin: str(o.coin),
+      amount: num(o.amount),
+      chainId: num(o.chainId),
+      toAddress: str(o.toAddress)
+    })
+  })
+  ipcMain.handle('evm:submit', (_e, input: unknown) => {
+    const o = obj(input)
+    return submitEvmSend({
+      walletId: str(o.walletId),
+      coin: str(o.coin),
+      amount: num(o.amount),
+      chainId: num(o.chainId),
+      toAddress: str(o.toAddress),
+      destCexAccountId: typeof o.destCexAccountId === 'string' ? o.destCexAccountId : undefined,
+      destLabel: typeof o.destLabel === 'string' ? o.destLabel : undefined
+    })
+  })
+
+  // Withdrawals
+  ipcMain.handle('withdrawals:list', () => listWithdrawals())
+  ipcMain.handle('withdrawals:clear', () => clearWithdrawals())
+  ipcMain.handle('withdrawals:remove', (_e, id: unknown) => removeWithdrawal(str(id)))
+  ipcMain.handle(
+    'exchanges:getDepositAddresses',
+    (_e, accountId: unknown, coin: unknown, network: unknown) =>
+      getDepositAddresses(str(accountId), str(coin), str(network))
+  )
+
+  // Deposits
+  ipcMain.handle('deposits:list', () => listDeposits())
+
+  // Wallets
+  ipcMain.handle('wallets:list', () => listWallets())
+  ipcMain.handle('wallets:add', (_e, input: unknown) => {
+    const o = obj(input)
+    return addWallet({
+      privateKey: typeof o.privateKey === 'string' ? o.privateKey : undefined,
+      address: typeof o.address === 'string' ? o.address : undefined,
+      network: typeof o.network === 'string' ? o.network : undefined,
+      label: typeof o.label === 'string' ? o.label : undefined
+    })
+  })
+  ipcMain.handle('wallets:remove', (_e, id: unknown) => removeWallet(str(id)))
+  ipcMain.handle('wallets:getBalances', (_e, address: unknown) =>
+    getEvmWalletBalances(str(address), listRpcs())
+  )
+
+  // Prefs
+  ipcMain.handle('prefs:get', () => getPrefs())
+  ipcMain.handle('prefs:save', (_e, prefs: unknown) => savePrefs(obj(prefs) as unknown as UserPrefs))
+
+  // RPC
+  ipcMain.handle('rpc:list', () => listRpcs())
+  ipcMain.handle('rpc:save', (_e, rpcs: unknown) => {
+    if (!Array.isArray(rpcs)) throw new Error('expected array')
+    return saveRpcs(rpcs as RpcEntry[])
+  })
+  ipcMain.handle('rpc:detect', (_e, url: unknown) => detectChain(str(url)))
+  ipcMain.handle('rpc:ping', (_e, url: unknown) => pingRpc('once', str(url)))
+  ipcMain.handle(
+    'rpc:pingMany',
+    (_e, entries: unknown) => {
+      if (!Array.isArray(entries)) throw new Error('expected array')
+      return pingMany(entries as { id: string; url: string }[])
+    }
+  )
+
+  createWindow()
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  })
+})
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit()
+})

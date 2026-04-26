@@ -1,9 +1,9 @@
-import type { Api } from "../../../preload/index.js";
+import type { Api } from '@shared/types'
 
 declare global {
   interface Window {
-    api: Api;
+    api: Api
   }
 }
 
-export {};
+export {}

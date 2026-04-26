@@ -1,179 +1,324 @@
-import { useEffect, useState, useCallback } from "react";
-import { api } from "../api.js";
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ArrowLeft, RefreshCw, Wallet } from 'lucide-react'
+import { EXCHANGE_META, type Source } from '../data/sources'
+import { SourceCard } from '../components/SourceCard'
+import { RpcTicker } from '../components/RpcTicker'
+import { ActionPanel } from '../components/ActionPanel'
+import { ActivityPanel } from '../components/ActivityPanel'
+import { ErrorBoundary } from '../components/ErrorBoundary'
+import { Button } from '../components/ui'
+import { cn } from '../lib/cn'
 
-export default function Dashboard() {
-  const [wallets, setWallets] = useState<any[]>([]);
-  const [exchanges, setExchanges] = useState<any[]>([]);
-  const [cexBalances, setCexBalances] = useState<Record<string, any>>({});
-  const [walletBalances, setWalletBalances] = useState<Record<string, any[]>>(
-    {},
-  );
-  const [walletBusy, setWalletBusy] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
+function useNow(intervalMs = 15_000): number {
+  const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
-    (async () => {
-      const [ws, exs] = await Promise.all([
-        api.wallets.list(),
-        api.exchanges.list(),
-      ]);
-      setWallets(ws);
-      setExchanges(exs);
-    })();
-  }, []);
+    const t = setInterval(() => setNow(Date.now()), intervalMs)
+    return () => clearInterval(t)
+  }, [intervalMs])
+  return now
+}
 
-  const refreshWalletBalances = useCallback(async (walletList: any[]) => {
-    if (walletList.length === 0) return;
-    setWalletBusy(true);
-    const out: Record<string, any[]> = {};
-    await Promise.all(
-      walletList.map(async (w) => {
-        try {
-          if (w.kind === "evm") {
-            const res = await api.balances.evmAll({
-              chain: "ethereum",
-              address: w.address,
-            });
-            out[w.id] = res.filter((b: any) => Number(b.amount) > 0);
-          } else if (w.kind === "solana") {
-            const res = await api.balances.sol({ address: w.address });
-            out[w.id] = [{ symbol: "SOL", amount: res.amount }];
-          }
-        } catch {
-          out[w.id] = [];
+function formatAgo(ts: number | null, now: number): string | null {
+  if (ts == null) return null
+  const s = Math.max(0, Math.round((now - ts) / 1000))
+  if (s < 10) return 'just now'
+  if (s < 60) return `${s}s ago`
+  const m = Math.round(s / 60)
+  if (m < 60) return `${m}m ago`
+  const h = Math.round(m / 60)
+  return `${h}h ago`
+}
+
+export function DashboardPage() {
+  const [sources, setSources] = useState<Source[]>([])
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [loadingMeta, setLoadingMeta] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null)
+  const now = useNow()
+
+  const loadSources = useCallback(async () => {
+    setLoadingMeta(true)
+    const [accounts, wallets] = await Promise.all([
+      window.api.exchanges.list(),
+      window.api.wallets.list()
+    ])
+    const initial: Source[] = [
+      ...accounts.map((acc) => {
+        const meta = EXCHANGE_META[acc.exchange]
+        return {
+          kind: 'cex' as const,
+          id: acc.accountId,
+          name: acc.label,
+          short: meta.short,
+          accent: meta.accent,
+          exchange: acc.exchange,
+          balances: null
         }
       }),
-    );
-    setWalletBalances((prev) => ({ ...prev, ...out }));
-    setWalletBusy(false);
-  }, []);
+      ...wallets.map((w) => ({
+        kind: 'evm' as const,
+        id: w.id,
+        name: w.label,
+        short: w.network ? w.network.toUpperCase() : 'EVM',
+        accent: '#627EEA',
+        address: w.address,
+        network: w.network,
+        canSend: w.canSend,
+        balances: null as Source['balances']
+      }))
+    ]
+    setSources(initial)
+    setLoadingMeta(false)
+    fetchAllBalances(initial)
+  }, [])
+
+  const fetchAllBalances = async (list: Source[]) => {
+    await Promise.all(
+      list.map(async (src) => {
+        const r =
+          src.kind === 'cex'
+            ? await window.api.exchanges.getBalances(src.id)
+            : src.address
+              ? await window.api.wallets.getBalances(src.address)
+              : { ok: true, balances: [] }
+        setSources((prev) =>
+          prev.map((s) =>
+            s.id === src.id
+              ? r.ok
+                ? { ...s, balances: r.balances ?? [], error: undefined }
+                : { ...s, error: r.error ?? 'fetch failed', balances: [] }
+              : s
+          )
+        )
+      })
+    )
+    setUpdatedAt(Date.now())
+  }
 
   useEffect(() => {
-    if (wallets.length === 0) return;
-    refreshWalletBalances(wallets);
-    const id = setInterval(() => refreshWalletBalances(wallets), 30_000);
-    return () => clearInterval(id);
-  }, [wallets, refreshWalletBalances]);
+    loadSources()
+  }, [loadSources])
 
-  const refreshCex = useCallback(async () => {
-    setBusy(true);
-    setErr(null);
-    const out: Record<string, any> = {};
-    for (const e of exchanges) {
-      try {
-        out[e.id] = await api.balances.cex(e.id);
-      } catch (x: any) {
-        out[e.id] = { error: x.message };
-      }
-    }
-    setCexBalances(out);
-    setBusy(false);
-  }, [exchanges]);
+  const refresh = async () => {
+    setRefreshing(true)
+    await fetchAllBalances(sources)
+    setRefreshing(false)
+  }
 
+  const refreshRef = useRef(refresh)
+  refreshRef.current = refresh
+  const refreshingRef = useRef(refreshing)
+  refreshingRef.current = refreshing
   useEffect(() => {
-    if (exchanges.length === 0) return;
-    refreshCex();
-    const interval = setInterval(() => {
-      refreshCex();
-    }, 10000); // 10s auto refresh
-    return () => clearInterval(interval);
-  }, [exchanges, refreshCex]);
+    const t = setInterval(() => {
+      if (refreshingRef.current) return
+      refreshRef.current()
+    }, 60_000)
+    return () => clearInterval(t)
+  }, [])
 
-  return (
-    <div className="space-y-6 max-w-5xl">
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xl font-semibold">Wallets</h2>
-          {walletBusy && (
-            <span className="text-xs text-neutral-500">Refreshing…</span>
-          )}
-        </div>
-        <div className="grid gap-2">
-          {wallets.length === 0 && (
-            <div className="text-neutral-500 text-sm">No wallets yet.</div>
-          )}
-          {wallets.map((w) => {
-            const bals = walletBalances[w.id];
-            return (
-              <div key={w.id} className="card">
-                <div className="font-medium">{w.label}</div>
-                <div className="text-xs text-neutral-400">
-                  {w.kind} · {w.address}
+  const selected = sources.find((s) => s.id === selectedId) ?? null
+  const ago = formatAgo(updatedAt, now)
+
+  // ---- Detail view (full takeover) ----
+  if (selected) {
+    return (
+      <div className="flex-1 min-h-0 flex flex-col relative z-10">
+        <RpcTicker />
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="max-w-6xl mx-auto px-8 py-6 space-y-6">
+            {/* Header */}
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setSelectedId(null)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-fg-muted hover:text-fg hover:bg-white/[0.06] transition-colors"
+              >
+                <ArrowLeft size={16} />
+              </button>
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold shrink-0"
+                  style={{
+                    background: selected.accent + '22',
+                    color: selected.accent,
+                    border: `1px solid ${selected.accent}33`
+                  }}
+                >
+                  {selected.kind === 'evm' ? (
+                    <Wallet size={16} />
+                  ) : (
+                    selected.short
+                  )}
                 </div>
-                {bals && bals.length > 0 && (
-                  <div className="mt-2 grid grid-cols-3 md:grid-cols-6 gap-1 text-xs">
-                    {bals.map((b: any, i: number) => (
-                      <div
-                        key={i}
-                        className="bg-neutral-800/50 rounded px-2 py-1"
-                      >
-                        <div className="text-neutral-300">{b.symbol}</div>
-                        <div className="text-neutral-500">
-                          {Number(b.amount).toFixed(4)}
-                        </div>
-                      </div>
-                    ))}
+                <div className="min-w-0">
+                  <div className="text-lg font-semibold text-fg truncate">
+                    {selected.name}
                   </div>
-                )}
-                {bals !== undefined && bals.length === 0 && (
-                  <div className="text-xs text-neutral-600 mt-1">
-                    No balances (ethereum)
+                  <div className="text-xs text-fg-muted flex items-center gap-2">
+                    <span className="uppercase">{selected.kind}</span>
+                    {selected.balances && (
+                      <>
+                        <span className="text-white/[0.15]">·</span>
+                        <span className="font-mono font-tnum">
+                          $
+                          {selected.balances
+                            .reduce((s, b) => s + b.usd, 0)
+                            .toLocaleString('en-US', {
+                              maximumFractionDigits: 2
+                            })}
+                        </span>
+                      </>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
-            );
-          })}
+              <div className="flex items-center gap-3 shrink-0">
+                {ago && (
+                  <span
+                    className={cn(
+                      'text-[11px] font-mono font-tnum text-fg-muted',
+                      refreshing && 'text-accent'
+                    )}
+                  >
+                    {refreshing ? 'refreshing…' : `updated ${ago}`}
+                  </span>
+                )}
+                <Button
+                  variant="ghost"
+                  onClick={refresh}
+                  disabled={refreshing}
+                  className="h-8 px-3 text-xs"
+                >
+                  <RefreshCw
+                    size={12}
+                    className={cn(refreshing && 'animate-spin')}
+                  />
+                  Refresh
+                </Button>
+              </div>
+            </div>
+
+            {/* Transfer panel */}
+            <ErrorBoundary label="Transfer panel">
+              <ActionPanel
+                source={selected}
+                sources={sources}
+                onRefresh={refresh}
+              />
+            </ErrorBoundary>
+
+            {/* Activity — all transactions */}
+            <ErrorBoundary label="Activity">
+              <ActivityPanel />
+            </ErrorBoundary>
+          </div>
         </div>
       </div>
+    )
+  }
 
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xl font-semibold">Exchanges</h2>
-          <button
-            className="btn-ghost"
-            onClick={refreshCex}
-            disabled={busy || exchanges.length === 0}
-          >
-            {busy ? "Loading…" : "Refresh balances"}
-          </button>
-        </div>
-        {err && <div className="text-red-400 text-sm">{err}</div>}
-        <div className="grid gap-2">
-          {exchanges.length === 0 && (
-            <div className="text-neutral-500 text-sm">No exchanges yet.</div>
-          )}
-          {exchanges.map((e) => {
-            const b = cexBalances[e.id];
-            return (
-              <div key={e.id} className="card">
-                <div className="font-medium">
-                  {e.label}{" "}
-                  <span className="text-neutral-500 text-xs">
-                    ({e.exchange})
-                  </span>
-                </div>
-                {b?.error && (
-                  <div className="text-red-400 text-xs mt-1">{b.error}</div>
-                )}
-                {b && !b.error && (
-                  <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-1 text-xs">
-                    {Object.entries(b).map(([asset, info]: any) => (
-                      <div
-                        key={asset}
-                        className="bg-neutral-800/50 rounded px-2 py-1"
+  // ---- Grid view ----
+  return (
+    <div className="flex-1 flex flex-col relative z-10">
+      <RpcTicker />
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="max-w-6xl mx-auto px-8 py-8 space-y-6">
+          <section>
+            <SectionHeader
+              label="Sources"
+              right={
+                sources.length > 0 && (
+                  <div className="flex items-center gap-3">
+                    {ago && (
+                      <span
+                        className={cn(
+                          'text-[11px] font-mono font-tnum text-fg-muted',
+                          refreshing && 'text-accent'
+                        )}
                       >
-                        <div className="text-neutral-300">{asset}</div>
-                        <div className="text-neutral-500">{info.total}</div>
-                      </div>
-                    ))}
+                        {refreshing ? 'refreshing…' : `updated ${ago}`}
+                      </span>
+                    )}
+                    <Button
+                      variant="ghost"
+                      onClick={refresh}
+                      disabled={refreshing}
+                      className="h-8 px-3 text-xs"
+                    >
+                      <RefreshCw
+                        size={12}
+                        className={cn(refreshing && 'animate-spin')}
+                      />
+                      Refresh
+                    </Button>
                   </div>
-                )}
+                )
+              }
+            />
+            {loadingMeta ? (
+              <GridSkeleton />
+            ) : sources.length === 0 ? (
+              <EmptyState />
+            ) : (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {sources.map((s) => {
+                  const isSource = s.kind === 'cex' || s.canSend !== false
+                  return (
+                    <SourceCard
+                      key={s.id}
+                      source={s}
+                      selected={false}
+                      onSelect={isSource ? () => setSelectedId(s.id) : undefined}
+                    />
+                  )
+                })}
               </div>
-            );
-          })}
+            )}
+          </section>
         </div>
       </div>
     </div>
-  );
+  )
+}
+
+function SectionHeader({
+  label,
+  right
+}: {
+  label: string
+  right?: React.ReactNode
+}) {
+  return (
+    <div className="flex items-center justify-between mb-2 pl-1 pr-1">
+      <div className="text-[10px] uppercase tracking-[0.2em] text-fg-muted">
+        {label}
+      </div>
+      {right}
+    </div>
+  )
+}
+
+function GridSkeleton() {
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div
+          key={i}
+          className="h-[140px] rounded-card border border-white/[0.06] bg-white/[0.02] animate-pulse"
+        />
+      ))}
+    </div>
+  )
+}
+
+function EmptyState() {
+  return (
+    <div className="rounded-card border border-white/[0.06] bg-white/[0.02] p-10 text-center">
+      <div className="text-sm text-fg mb-1">No sources configured yet</div>
+      <div className="text-xs text-fg-muted">
+        Add an exchange account or EVM wallet in Settings to begin.
+      </div>
+    </div>
+  )
 }

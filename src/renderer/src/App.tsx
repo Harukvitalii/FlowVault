@@ -1,83 +1,70 @@
-import { useEffect, useState } from "react";
-import Setup from "./pages/Setup.js";
-import Login from "./pages/Login.js";
-import Dashboard from "./pages/Dashboard.js";
-import Wallets from "./pages/Wallets.js";
-import Exchanges from "./pages/Exchanges.js";
-import Transfer from "./pages/Transfer.js";
-import History from "./pages/History.js";
-import Rpcs from "./pages/Rpcs.js";
-import { api } from "./api.js";
+import { useEffect, useState } from 'react'
+import { Titlebar } from './components/Titlebar'
+import { LockPage } from './pages/Lock'
+import { DashboardPage } from './pages/Dashboard'
+import { SettingsPage } from './pages/Settings'
+import type { VaultState } from '@shared/types'
 
-type Tab =
-  | "dashboard"
-  | "wallets"
-  | "exchanges"
-  | "rpcs"
-  | "transfer"
-  | "history";
+type View = 'dashboard' | 'settings'
 
 export default function App() {
-  const [status, setStatus] = useState<{
-    exists: boolean;
-    unlocked: boolean;
-  } | null>(null);
-  const [tab, setTab] = useState<Tab>("dashboard");
+  const [vaultState, setVaultState] = useState<VaultState>('locked')
+  const [view, setView] = useState<View>('dashboard')
+  const [loaded, setLoaded] = useState(false)
 
-  async function refresh() {
-    setStatus(await api.vault.status());
-  }
   useEffect(() => {
-    refresh();
-  }, []);
+    window.api.vault.state().then((s) => {
+      setVaultState(s)
+      setLoaded(true)
+    })
+  }, [])
 
-  if (!status) return <div className="p-8 text-neutral-400">Loading…</div>;
+  const unlocked = vaultState === 'unlocked'
 
-  if (!status.exists) return <Setup onDone={refresh} />;
-  if (!status.unlocked) return <Login onDone={refresh} />;
+  // Fire warmup every time the vault transitions into 'unlocked'.
+  useEffect(() => {
+    if (vaultState === 'unlocked') {
+      window.api.exchanges.warmup().catch(() => undefined)
+    }
+  }, [vaultState])
 
-  async function lock() {
-    await api.vault.lock();
-    await refresh();
+  const lock = async () => {
+    await window.api.vault.lock()
+    setVaultState('locked')
+    setView('dashboard')
   }
-
-  const tabs: { id: Tab; label: string }[] = [
-    { id: "dashboard", label: "Dashboard" },
-    { id: "wallets", label: "Wallets" },
-    { id: "exchanges", label: "Exchanges" },
-    { id: "rpcs", label: "RPCs" },
-    { id: "transfer", label: "Transfer" },
-    { id: "history", label: "History" },
-  ];
 
   return (
-    <div className="min-h-full flex">
-      <aside className="w-56 border-r border-neutral-800 p-4 flex flex-col gap-1">
-        <div className="text-lg font-semibold mb-4">Withdraw</div>
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            className={`text-left px-3 py-2 rounded-md text-sm ${
-              tab === t.id ? "bg-neutral-800" : "hover:bg-neutral-900"
-            }`}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
+    <div className="h-full flex flex-col text-fg overflow-hidden">
+      <div className="bg-ambient" />
+      <Titlebar
+        unlocked={unlocked}
+        onLock={lock}
+        onOpenSettings={() =>
+          setView((v) => (v === 'settings' ? 'dashboard' : 'settings'))
+        }
+        current={view}
+      />
+
+      {!loaded ? (
         <div className="flex-1" />
-        <button className="btn-ghost" onClick={lock}>
-          Lock
-        </button>
-      </aside>
-      <main className="flex-1 p-6 overflow-auto">
-        {tab === "dashboard" && <Dashboard />}
-        {tab === "wallets" && <Wallets />}
-        {tab === "exchanges" && <Exchanges />}
-        {tab === "rpcs" && <Rpcs />}
-        {tab === "transfer" && <Transfer />}
-        {tab === "history" && <History />}
-      </main>
+      ) : !unlocked ? (
+        <LockPage
+          vaultState={vaultState}
+          onUnlocked={() => setVaultState('unlocked')}
+        />
+      ) : view === 'settings' ? (
+        <SettingsPage
+          onWiped={() => {
+            setVaultState('empty')
+            setView('dashboard')
+          }}
+        />
+      ) : (
+        <div className="flex-1 min-h-0 flex flex-col">
+          <DashboardPage />
+        </div>
+      )}
     </div>
-  );
+  )
 }

@@ -1,39 +1,37 @@
-import { defineConfig, externalizeDepsPlugin } from "electron-vite";
-import react from "@vitejs/plugin-react";
-import { resolve } from "path";
+import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
+import react from '@vitejs/plugin-react'
+import { resolve } from 'node:path'
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin({ exclude: [] })],
+    plugins: [externalizeDepsPlugin()],
     build: {
       rollupOptions: {
-        input: { index: resolve(__dirname, "src/main/index.ts") },
-        external: [
-          "ccxt",
-          "viem",
-          "@solana/web3.js",
-          "@solana/spl-token",
-          "bs58",
-          "electron",
-        ],
-      },
-    },
+        input: resolve(__dirname, 'src/main/index.ts')
+      }
+    }
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
     build: {
       rollupOptions: {
-        input: { index: resolve(__dirname, "src/preload/index.ts") },
-      },
-    },
+        input: resolve(__dirname, 'src/preload/index.ts')
+      }
+    }
   },
   renderer: {
-    root: resolve(__dirname, "src/renderer"),
+    root: resolve(__dirname, 'src/renderer'),
     build: {
       rollupOptions: {
-        input: { index: resolve(__dirname, "src/renderer/index.html") },
-      },
+        input: resolve(__dirname, 'src/renderer/index.html')
+      }
     },
-    plugins: [react()],
-  },
-});
+    resolve: {
+      alias: {
+        '@': resolve(__dirname, 'src/renderer/src'),
+        '@shared': resolve(__dirname, 'src/shared')
+      }
+    },
+    plugins: [react()]
+  }
+})
