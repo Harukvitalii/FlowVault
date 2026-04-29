@@ -9,6 +9,7 @@ export default defineConfig({
       rollupOptions: {
         input: resolve(__dirname, 'src/main/index.ts'),
         external: [
+          'electron',
           'ccxt',
           /^ccxt\//,
           'protobufjs',
@@ -24,7 +25,12 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
     build: {
       rollupOptions: {
-        input: resolve(__dirname, 'src/preload/index.ts')
+        input: resolve(__dirname, 'src/preload/index.ts'),
+        external: ['electron'],
+        output: {
+          format: 'cjs',
+          entryFileNames: '[name].js'
+        }
       }
     }
   },
