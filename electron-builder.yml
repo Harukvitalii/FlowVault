@@ -38,22 +38,13 @@ mac:
 
 win:
   target:
-    - target: nsis
-      arch:
-        - x64
     - target: portable
       arch:
         - x64
   # No signing by default — SmartScreen will warn until you supply a cert.
-
-nsis:
-  oneClick: false
-  allowToChangeInstallationDirectory: true
-  perMachine: false
-  deleteAppDataOnUninstall: false
-  createDesktopShortcut: always
-  createStartMenuShortcut: true
-  shortcutName: FlowVault
+  # NSIS installer disabled to avoid winCodeSign symlink-privilege errors on
+  # non-admin Windows builds. Re-enable once Windows Developer Mode is on or
+  # a code-signing cert is configured.
 
 linux:
   category: Finance
