@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react'
 import { KeyRound, Lock as LockIcon } from 'lucide-react'
 import { GlassCard } from '../components/GlassCard'
 import { cn } from '../lib/cn'
+import { useI18n } from '../lib/i18n'
 import type { VaultState } from '@shared/types'
 
 type Props = {
@@ -10,6 +11,7 @@ type Props = {
 }
 
 export function LockPage({ vaultState, onUnlocked }: Props) {
+  const { t } = useI18n()
   const isCreate = vaultState === 'empty'
 
   const [key1, setKey1] = useState('')
@@ -26,22 +28,22 @@ export function LockPage({ vaultState, onUnlocked }: Props) {
     if (busy) return
     setError(null)
     if (key1.length < 8) {
-      setError('Master key must be at least 8 characters.')
+      setError(t('lock.minChars'))
       return
     }
     if (isCreate && key1 !== key2) {
-      setError('Keys do not match.')
+      setError(t('lock.noMatch'))
       return
     }
     setBusy(true)
     try {
       if (isCreate) {
         const r = await window.api.vault.create(key1)
-        if (!r.ok) setError('Could not create vault.')
+        if (!r.ok) setError(t('lock.createFailed'))
         else onUnlocked()
       } else {
         const r = await window.api.vault.unlock(key1)
-        if (!r.ok) setError(r.error ?? 'Unlock failed.')
+        if (!r.ok) setError(r.error ?? t('lock.unlockFailed'))
         else onUnlocked()
       }
     } finally {
@@ -58,12 +60,12 @@ export function LockPage({ vaultState, onUnlocked }: Props) {
           </div>
           <div>
             <h1 className="text-xl font-semibold text-fg">
-              {isCreate ? 'Create master key' : 'Unlock vault'}
+              {isCreate ? t('lock.create') : t('lock.unlock')}
             </h1>
             <p className="text-sm text-fg-muted mt-1">
               {isCreate
-                ? 'Encrypts all exchange keys and wallet private keys on this device.'
-                : 'Enter your master key to access exchanges and wallets.'}
+                ? t('lock.create.desc')
+                : t('lock.unlock.desc')}
             </p>
           </div>
         </div>
@@ -71,13 +73,13 @@ export function LockPage({ vaultState, onUnlocked }: Props) {
         <form onSubmit={submit} className="space-y-3">
           <InputRow
             autoFocus
-            placeholder="Master key"
+            placeholder={t('lock.masterKey')}
             value={key1}
             onChange={setKey1}
           />
           {isCreate && (
             <InputRow
-              placeholder="Repeat master key"
+              placeholder={t('lock.repeat')}
               value={key2}
               onChange={setKey2}
             />
@@ -97,14 +99,13 @@ export function LockPage({ vaultState, onUnlocked }: Props) {
                 : 'bg-accent text-on-accent hover:bg-accent-hover active:scale-[0.99] shadow-cta'
             )}
           >
-            {isCreate ? 'Create & unlock' : 'Unlock'}
+            {isCreate ? t('lock.createBtn') : t('lock.unlockBtn')}
           </button>
         </form>
 
         {isCreate && (
           <p className="text-[11px] text-fg-muted/80 text-center leading-relaxed">
-            There is no recovery. If you forget the master key, all stored
-            keys are lost.
+            {t('lock.noRecovery')}
           </p>
         )}
       </GlassCard>

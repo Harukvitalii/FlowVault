@@ -3,6 +3,7 @@ import { AlertTriangle, KeyRound, ShieldOff, Trash2 } from 'lucide-react'
 import { GlassCard } from './GlassCard'
 import { Button, Input, Row } from './ui'
 import { cn } from '../lib/cn'
+import { useI18n } from '../lib/i18n'
 import type { UserPrefs } from '@shared/types'
 
 type Props = {
@@ -20,6 +21,7 @@ export function SecurityTab({ onWiped }: Props) {
 }
 
 function SkipPreflightCard() {
+  const { t } = useI18n()
   const [prefs, setPrefs] = useState<UserPrefs | null>(null)
   const [step, setStep] = useState<'closed' | 'confirm' | 'done'>('closed')
   const [busy, setBusy] = useState(false)
@@ -61,9 +63,9 @@ function SkipPreflightCard() {
         <div className="flex items-center gap-2">
           <ShieldOff size={16} className={enabled ? 'text-warn' : 'text-fg-muted'} />
           <div>
-            <h3 className="text-sm font-semibold text-fg">Skip preflight checks</h3>
+            <h3 className="text-sm font-semibold text-fg">{t('security.skipPreflight')}</h3>
             <p className="text-xs text-fg-muted mt-0.5">
-              Submit withdrawals without running the dry-run safety check first.
+              {t('security.skipPreflight.desc')}
             </p>
           </div>
         </div>
@@ -96,16 +98,11 @@ function SkipPreflightCard() {
           <div className="flex items-start gap-2">
             <AlertTriangle size={14} className="text-warn mt-0.5 shrink-0" />
             <div className="text-xs text-fg leading-relaxed">
-              <span className="font-semibold text-warn">Warning:</span> Disabling
-              preflight checks removes the safety net that catches mistakes before
-              your funds leave the exchange. You could send to a wrong address, wrong
-              network, or with insufficient balance — and <span className="font-semibold">
-              crypto transactions are irreversible</span>.
+              <span className="font-semibold text-warn">{t('security.skipPreflight.confirm.title')}</span> {t('security.skipPreflight.confirm.body')}
             </div>
           </div>
           <p className="text-[11px] text-fg-muted">
-            Only disable this if you fully understand the risk and want faster
-            withdrawals without the dry-run step.
+            {t('security.skipPreflight.confirm.note')}
           </p>
           <div className="flex items-center gap-2 justify-end">
             <Button
@@ -113,7 +110,7 @@ function SkipPreflightCard() {
               onClick={() => setStep('closed')}
               className="h-8 px-3 text-xs"
             >
-              Cancel
+              {t('wallets.cancel')}
             </Button>
             <Button
               variant="danger"
@@ -121,7 +118,7 @@ function SkipPreflightCard() {
               disabled={busy}
               className="h-8 px-3 text-xs"
             >
-              I understand, disable preflight
+              {t('security.skipPreflight.confirm.btn')}
             </Button>
           </div>
         </div>
@@ -130,7 +127,7 @@ function SkipPreflightCard() {
       {enabled && step === 'closed' && (
         <div className="mt-3 flex items-center gap-2 text-[11px] text-warn">
           <AlertTriangle size={11} />
-          Preflight checks are disabled — withdrawals submit without dry-run verification.
+          {t('security.skipPreflight.warn')}
         </div>
       )}
     </GlassCard>
@@ -138,6 +135,7 @@ function SkipPreflightCard() {
 }
 
 function ChangeMasterCard() {
+  const { t } = useI18n()
   const [oldKey, setOldKey] = useState('')
   const [newKey, setNewKey] = useState('')
   const [repeatKey, setRepeatKey] = useState('')
@@ -148,11 +146,11 @@ function ChangeMasterCard() {
     e.preventDefault()
     setMsg(null)
     if (newKey.length < 8) {
-      setMsg({ ok: false, text: 'New master key must be at least 8 chars.' })
+      setMsg({ ok: false, text: t('lock.minChars') })
       return
     }
     if (newKey !== repeatKey) {
-      setMsg({ ok: false, text: 'New keys do not match.' })
+      setMsg({ ok: false, text: t('lock.noMatch') })
       return
     }
     setBusy(true)
@@ -165,17 +163,17 @@ function ChangeMasterCard() {
     setOldKey('')
     setNewKey('')
     setRepeatKey('')
-    setMsg({ ok: true, text: 'Master key changed.' })
+    setMsg({ ok: true, text: t('security.keyChanged') })
   }
 
   return (
     <GlassCard className="p-5">
       <div className="flex items-center gap-2 mb-4">
         <KeyRound size={16} className="text-accent" />
-        <h3 className="text-sm font-semibold text-fg">Change master key</h3>
+        <h3 className="text-sm font-semibold text-fg">{t('security.changeMaster')}</h3>
       </div>
       <form onSubmit={submit} className="space-y-3">
-        <Row label="Current master key">
+        <Row label={t('security.currentKey')}>
           <Input
             type="password"
             value={oldKey}
@@ -183,7 +181,7 @@ function ChangeMasterCard() {
             autoComplete="current-password"
           />
         </Row>
-        <Row label="New master key">
+        <Row label={t('security.newKey')}>
           <Input
             type="password"
             value={newKey}
@@ -191,7 +189,7 @@ function ChangeMasterCard() {
             autoComplete="new-password"
           />
         </Row>
-        <Row label="Repeat new master key">
+        <Row label={t('security.repeatNew')}>
           <Input
             type="password"
             value={repeatKey}
@@ -208,7 +206,7 @@ function ChangeMasterCard() {
         )}
         <div className="flex justify-end">
           <Button type="submit" variant="primary" disabled={busy}>
-            {busy ? 'Re-encrypting…' : 'Change key'}
+            {busy ? t('security.reencrypting') : t('security.changeBtn')}
           </Button>
         </div>
       </form>
@@ -217,6 +215,7 @@ function ChangeMasterCard() {
 }
 
 function WipeVaultCard({ onWiped }: { onWiped: () => void }) {
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const [confirm, setConfirm] = useState('')
   const [busy, setBusy] = useState(false)
@@ -233,20 +232,19 @@ function WipeVaultCard({ onWiped }: { onWiped: () => void }) {
     <GlassCard className="p-5 border-danger/25">
       <div className="flex items-center gap-2 mb-2">
         <AlertTriangle size={16} className="text-danger" />
-        <h3 className="text-sm font-semibold text-fg">Wipe vault</h3>
+        <h3 className="text-sm font-semibold text-fg">{t('security.wipeVault')}</h3>
       </div>
       <p className="text-xs text-fg-muted mb-4">
-        Permanently deletes all exchange keys and wallet private keys stored on
-        this device. Cannot be undone.
+        {t('security.wipeDesc')}
       </p>
       {!open ? (
         <Button variant="danger" onClick={() => setOpen(true)}>
           <Trash2 size={14} />
-          Wipe vault…
+          {t('security.wipeBtn')}
         </Button>
       ) : (
         <div className="space-y-3">
-          <Row label="Type WIPE to confirm">
+          <Row label={t('security.wipeConfirm')}>
             <Input
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
@@ -262,10 +260,10 @@ function WipeVaultCard({ onWiped }: { onWiped: () => void }) {
                 setConfirm('')
               }}
             >
-              Cancel
+              {t('wallets.cancel')}
             </Button>
             <Button variant="danger" disabled={!ready || busy} onClick={wipe}>
-              {busy ? 'Wiping…' : 'Wipe vault'}
+              {busy ? t('security.wiping') : t('security.wipeVault')}
             </Button>
           </div>
         </div>

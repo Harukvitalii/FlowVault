@@ -15,29 +15,26 @@ import { familyLabel, networkFamily } from '@shared/networks'
 import { GlassCard } from './GlassCard'
 import { Button } from './ui'
 import { cn } from '../lib/cn'
+import { useI18n } from '../lib/i18n'
 
 function short(s: string, head = 8, tail = 6): string {
   if (s.length <= head + tail + 1) return s
   return `${s.slice(0, head)}…${s.slice(-tail)}`
 }
 
-function ago(ts: number, now: number): string {
+function ago(ts: number, now: number, t: (key: string) => string): string {
   const s = Math.max(0, Math.round((now - ts) / 1000))
-  if (s < 10) return 'just now'
-  if (s < 60) return `${s}s ago`
+  if (s < 10) return t('ago.justNow')
+  if (s < 60) return t('ago.seconds').replace('{n}', String(s))
   const m = Math.round(s / 60)
-  if (m < 60) return `${m}m ago`
+  if (m < 60) return t('ago.minutes').replace('{n}', String(m))
   const h = Math.round(m / 60)
-  if (h < 24) return `${h}h ago`
-  return `${Math.round(h / 24)}d ago`
+  if (h < 24) return t('ago.hours').replace('{n}', String(h))
+  return t('ago.days').replace('{n}', String(Math.round(h / 24)))
 }
 
-const STATUS_LABEL: Record<WithdrawStatus, string> = {
-  submitting: 'Submitting',
-  pending: 'Pending',
-  processing: 'Processing',
-  ok: 'Completed',
-  failed: 'Failed'
+function statusLabel(status: WithdrawStatus, t: (key: string) => string): string {
+  return t(`status.${status}`)
 }
 
 type ActivityItem =
@@ -45,6 +42,7 @@ type ActivityItem =
   | { type: 'deposit'; record: DepositRecord; ts: number }
 
 export function ActivityPanel() {
+  const { t } = useI18n()
   const [withdrawals, setWithdrawals] = useState<WithdrawRecord[] | null>(null)
   const [deposits, setDeposits] = useState<DepositRecord[]>([])
   const [collapsed, setCollapsed] = useState(false)
@@ -104,11 +102,11 @@ export function ActivityPanel() {
           className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.2em] text-fg-muted hover:text-fg transition-colors"
         >
           {collapsed ? <ChevronRight size={10} /> : <ChevronDown size={10} />}
-          Activity
+          {t('activity')}
           <span className="text-fg-muted/60 ml-1">· {items.length}</span>
           {activeCount > 0 && (
             <span className="ml-2 text-[10px] text-accent normal-case tracking-normal">
-              {activeCount} in flight
+              {activeCount} {t('inFlight')}
             </span>
           )}
         </button>
@@ -122,12 +120,12 @@ export function ActivityPanel() {
           className="h-7 px-2 text-[11px]"
           title={
             activeCount > 0
-              ? 'Wait for in-flight items to settle'
-              : 'Clear withdrawal history'
+              ? t('waitInFlight')
+              : t('clearHistory')
           }
         >
           <Trash2 size={11} />
-          Clear
+          {t('clear')}
         </Button>
       </div>
 
@@ -147,6 +145,7 @@ export function ActivityPanel() {
 }
 
 function Row({ record, now }: { record: WithdrawRecord; now: number }) {
+  const { t } = useI18n()
   const [copied, setCopied] = useState<string | null>(null)
   const copy = async (text: string) => {
     await navigator.clipboard.writeText(text)
@@ -175,7 +174,7 @@ function Row({ record, now }: { record: WithdrawRecord; now: number }) {
         </div>
         <div className="flex items-center gap-2 text-[11px] text-fg-muted mt-0.5">
           <StatusPill status={record.status} />
-          <span>{ago(record.updatedAt, now)}</span>
+          <span>{ago(record.updatedAt, now, t)}</span>
           {record.fee > 0 && (
             <span className="font-mono">· fee {record.fee} {record.coin}</span>
           )}
@@ -199,12 +198,12 @@ function Row({ record, now }: { record: WithdrawRecord; now: number }) {
             <button
               onClick={() => copy(record.chainTxHash!)}
               className="text-fg-muted/70 hover:text-fg transition-colors"
-              title="Copy"
+              title={t('copy')}
             >
               <Copy size={11} />
             </button>
             {copied === record.chainTxHash && (
-              <span className="text-accent">copied</span>
+              <span className="text-accent">{t('copied')}</span>
             )}
             {explorer && (
               <a
@@ -212,7 +211,7 @@ function Row({ record, now }: { record: WithdrawRecord; now: number }) {
                 target="_blank"
                 rel="noreferrer"
                 className="text-fg-muted/70 hover:text-fg transition-colors"
-                title="View on explorer"
+                title={t('viewExplorer')}
               >
                 <ExternalLink size={11} />
               </a>
@@ -224,7 +223,7 @@ function Row({ record, now }: { record: WithdrawRecord; now: number }) {
         <button
           onClick={() => copy(record.address)}
           className="w-7 h-7 rounded-md text-fg-muted hover:text-fg hover:bg-white/[0.06] inline-flex items-center justify-center"
-          title="Copy address"
+          title={t('copyAddress')}
         >
           <Copy size={12} />
         </button>
@@ -242,8 +241,8 @@ function Row({ record, now }: { record: WithdrawRecord; now: number }) {
           )}
           title={
             record.status === 'submitting' || record.status === 'pending' || record.status === 'processing'
-              ? 'Wait for withdrawal to settle'
-              : 'Remove from history'
+              ? t('waitSettle')
+              : t('removeHistory')
           }
         >
           <Trash2 size={12} />
@@ -254,10 +253,11 @@ function Row({ record, now }: { record: WithdrawRecord; now: number }) {
 }
 
 function DepositRow({ record, now }: { record: DepositRecord; now: number }) {
+  const { t } = useI18n()
   const DEPOSIT_LABEL: Record<string, string> = {
-    pending: 'Pending',
-    processing: 'Confirming',
-    ok: 'Deposited'
+    pending: t('deposit.pending'),
+    processing: t('deposit.processing'),
+    ok: t('deposit.ok')
   }
   const pillTone =
     record.status === 'ok'
@@ -295,7 +295,7 @@ function DepositRow({ record, now }: { record: DepositRecord; now: number }) {
           >
             {DEPOSIT_LABEL[record.status] ?? record.status}
           </span>
-          <span>{ago(record.depositedAt, now)}</span>
+          <span>{ago(record.depositedAt, now, t)}</span>
         </div>
       </div>
     </div>
@@ -310,6 +310,7 @@ function StatusIcon({ status }: { status: WithdrawStatus }) {
 }
 
 function StatusPill({ status }: { status: WithdrawStatus }) {
+  const { t } = useI18n()
   const tone =
     status === 'ok'
       ? 'text-accent border-accent/30 bg-accent/10'
@@ -323,7 +324,7 @@ function StatusPill({ status }: { status: WithdrawStatus }) {
         tone
       )}
     >
-      {STATUS_LABEL[status]}
+      {statusLabel(status, t)}
     </span>
   )
 }

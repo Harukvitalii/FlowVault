@@ -27,7 +27,7 @@ export const WITHDRAW_TYPE: Record<ExchangeId, string> = {
   binance: 'spot',
   gate: 'spot',
   okx: 'funding',
-  bybit: 'funding',
+  bybit: 'unified',
   kucoin: 'main',
   bitget: 'spot',
   htx: 'spot',

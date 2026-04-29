@@ -3,6 +3,7 @@ import { Copy, Eye, Key, Trash2, Wallet, X } from 'lucide-react'
 import { GlassCard } from './GlassCard'
 import { Button, Input, Row } from './ui'
 import { cn } from '../lib/cn'
+import { useI18n } from '../lib/i18n'
 import type { WalletMeta } from '@shared/types'
 
 const NETWORK_OPTIONS = [
@@ -25,6 +26,7 @@ function shortAddr(addr: string): string {
 }
 
 export function WalletsTab() {
+  const { t } = useI18n()
   const [list, setList] = useState<WalletMeta[]>([])
   const [addMode, setAddMode] = useState<'none' | 'key' | 'watch'>('none')
   const [confirmId, setConfirmId] = useState<string | null>(null)
@@ -46,8 +48,7 @@ export function WalletsTab() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-xs text-fg-muted">
-          Full wallets (with private key) can send. Watch-only wallets are
-          destination-only.
+          {t('wallets.desc')}
         </p>
         <div className="flex items-center gap-1.5">
           {addMode !== 'none' ? (
@@ -57,7 +58,7 @@ export function WalletsTab() {
               className="h-9 px-3 text-xs"
             >
               <X size={14} />
-              Cancel
+              {t('wallets.cancel')}
             </Button>
           ) : (
             <>
@@ -67,7 +68,7 @@ export function WalletsTab() {
                 className="h-9 px-3 text-xs"
               >
                 <Key size={13} />
-                Add with key
+                {t('wallets.addKey')}
               </Button>
               <Button
                 variant="ghost"
@@ -75,7 +76,7 @@ export function WalletsTab() {
                 className="h-9 px-3 text-xs"
               >
                 <Eye size={13} />
-                Watch-only
+                {t('wallets.watchOnly')}
               </Button>
             </>
           )}
@@ -106,8 +107,7 @@ export function WalletsTab() {
 
       {list.length === 0 && addMode === 'none' ? (
         <GlassCard className="p-8 text-center text-sm text-fg-muted">
-          No wallets yet. Add one with a private key (for sending) or
-          watch-only (as a destination).
+          {t('wallets.noWallets')}
         </GlassCard>
       ) : (
         list.map((w) => {
@@ -143,7 +143,7 @@ export function WalletsTab() {
                       )}
                     >
                       {w.network ?? 'EVM'}
-                      {!w.canSend && ' · watch'}
+                      {!w.canSend && ` · ${t('wallets.watch')}`}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
@@ -153,18 +153,18 @@ export function WalletsTab() {
                     <button
                       onClick={() => copy(w.address)}
                       className="text-fg-muted hover:text-fg transition-colors"
-                      title={copied === w.address ? 'Copied' : 'Copy address'}
+                      title={copied === w.address ? t('copied') : t('copyAddress')}
                     >
                       <Copy size={12} />
                     </button>
                     {copied === w.address && (
-                      <span className="text-[10px] text-accent">copied</span>
+                      <span className="text-[10px] text-accent">{t('copied')}</span>
                     )}
                   </div>
                 </div>
                 {confirming ? (
                   <>
-                    <span className="text-xs text-fg-muted mr-1">Sure?</span>
+                    <span className="text-xs text-fg-muted mr-1">{t('wallets.sure')}</span>
                     <Button
                       variant="danger"
                       onClick={async () => {
@@ -174,14 +174,14 @@ export function WalletsTab() {
                       }}
                       className="h-9 px-3 text-xs"
                     >
-                      Remove
+                      {t('wallets.remove')}
                     </Button>
                     <Button
                       variant="ghost"
                       onClick={() => setConfirmId(null)}
                       className="h-9 px-3 text-xs"
                     >
-                      Cancel
+                      {t('wallets.cancel')}
                     </Button>
                   </>
                 ) : (
@@ -189,7 +189,7 @@ export function WalletsTab() {
                     variant="ghost"
                     onClick={() => setConfirmId(w.id)}
                     className="h-9 px-3 text-xs hover:text-danger"
-                    title="Remove wallet"
+                    title={t('wallets.remove')}
                   >
                     <Trash2 size={14} />
                   </Button>
@@ -204,6 +204,7 @@ export function WalletsTab() {
 }
 
 function AddKeyWalletForm({ onDone }: { onDone: () => void }) {
+  const { t } = useI18n()
   const [label, setLabel] = useState('')
   const [pk, setPk] = useState('')
   const [walletType, setWalletType] = useState<'EVM' | 'SOL'>('EVM')
@@ -227,9 +228,9 @@ function AddKeyWalletForm({ onDone }: { onDone: () => void }) {
   return (
     <form onSubmit={submit} className="space-y-3">
       <div className="text-[10px] uppercase tracking-widest text-fg-muted mb-2">
-        Full wallet — can send transactions
+        {t('wallets.fullWallet')}
       </div>
-      <Row label="Chain">
+      <Row label={t('wallets.chain')}>
         <div className="flex gap-1.5">
           <button
             type="button"
@@ -257,14 +258,14 @@ function AddKeyWalletForm({ onDone }: { onDone: () => void }) {
           </button>
         </div>
       </Row>
-      <Row label="Label (optional)">
+      <Row label={t('wallets.label')}>
         <Input
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="e.g. Main EVM"
         />
       </Row>
-      <Row label={walletType === 'SOL' ? 'Private key (base58 or JSON array)' : 'Private key (0x... 64 hex chars)'}>
+      <Row label={walletType === 'SOL' ? `${t('wallets.privateKey')} (base58 or JSON array)` : `${t('wallets.privateKey')} (0x... 64 hex chars)`}>
         <Input
           mono
           type="password"
@@ -277,10 +278,10 @@ function AddKeyWalletForm({ onDone }: { onDone: () => void }) {
       {error && <div className="text-xs text-danger">{error}</div>}
       <div className="flex items-center gap-2 justify-end">
         <Button type="button" variant="ghost" onClick={onDone}>
-          Cancel
+          {t('wallets.cancel')}
         </Button>
         <Button type="submit" variant="primary" disabled={busy}>
-          {busy ? 'Deriving…' : 'Add wallet'}
+          {busy ? t('wallets.deriving') : t('wallets.add')}
         </Button>
       </div>
     </form>
@@ -288,6 +289,7 @@ function AddKeyWalletForm({ onDone }: { onDone: () => void }) {
 }
 
 function AddWatchWalletForm({ onDone }: { onDone: () => void }) {
+  const { t } = useI18n()
   const [label, setLabel] = useState('')
   const [address, setAddress] = useState('')
   const [network, setNetwork] = useState('EVM')
@@ -315,16 +317,16 @@ function AddWatchWalletForm({ onDone }: { onDone: () => void }) {
   return (
     <form onSubmit={submit} className="space-y-3">
       <div className="text-[10px] uppercase tracking-widest text-fg-muted mb-2">
-        Watch-only — destination only, no private key
+        {t('wallets.watchOnlyDesc')}
       </div>
-      <Row label="Label (optional)">
+      <Row label={t('wallets.label')}>
         <Input
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="e.g. Cold storage"
         />
       </Row>
-      <Row label="Network">
+      <Row label={t('wallets.network')}>
         <select
           value={network}
           onChange={(e) => setNetwork(e.target.value)}
@@ -342,7 +344,7 @@ function AddWatchWalletForm({ onDone }: { onDone: () => void }) {
           ))}
         </select>
       </Row>
-      <Row label="Address">
+      <Row label={t('wallets.address')}>
         <Input
           mono
           value={address}
@@ -361,10 +363,10 @@ function AddWatchWalletForm({ onDone }: { onDone: () => void }) {
       {error && <div className="text-xs text-danger">{error}</div>}
       <div className="flex items-center gap-2 justify-end">
         <Button type="button" variant="ghost" onClick={onDone}>
-          Cancel
+          {t('wallets.cancel')}
         </Button>
         <Button type="submit" variant="primary" disabled={busy}>
-          {busy ? 'Adding…' : 'Add watch-only'}
+          {busy ? t('wallets.adding') : t('wallets.addWatch')}
         </Button>
       </div>
     </form>

@@ -1,5 +1,6 @@
 import { Lock, Settings } from 'lucide-react'
 import { cn } from '../lib/cn'
+import { useI18n } from '../lib/i18n'
 
 type Props = {
   unlocked: boolean
@@ -11,6 +12,7 @@ type Props = {
 const isMac = navigator.userAgent.includes('Mac')
 
 export function Titlebar({ unlocked, onLock, onOpenSettings, current }: Props) {
+  const { t } = useI18n()
   return (
     <div
       className={cn(
@@ -41,7 +43,7 @@ export function Titlebar({ unlocked, onLock, onOpenSettings, current }: Props) {
           )}
         >
           <Settings size={13} />
-          Settings
+          {t('settings')}
         </button>
         {unlocked && (
           <button
@@ -49,7 +51,7 @@ export function Titlebar({ unlocked, onLock, onOpenSettings, current }: Props) {
             className="px-3 h-7 rounded-btn inline-flex items-center gap-1.5 text-xs text-fg-muted hover:text-danger hover:bg-white/[0.04] transition-colors"
           >
             <Lock size={13} />
-            Lock
+            {t('lock')}
           </button>
         )}
       </div>
@@ -58,6 +60,7 @@ export function Titlebar({ unlocked, onLock, onOpenSettings, current }: Props) {
 }
 
 function StatusPill({ unlocked }: { unlocked: boolean }) {
+  const { t } = useI18n()
   return (
     <div
       className={cn(
@@ -72,7 +75,7 @@ function StatusPill({ unlocked }: { unlocked: boolean }) {
           unlocked ? 'bg-accent' : 'bg-fg-muted'
         )}
       />
-      {unlocked ? 'Vault unlocked' : 'Vault locked'}
+      {unlocked ? t('vault.unlocked') : t('vault.locked')}
     </div>
   )
 }

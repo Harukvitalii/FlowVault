@@ -18,6 +18,7 @@ import type {
 import { familyLabel } from '@shared/networks'
 import { formatEta } from '@shared/eta'
 import { cn } from '../lib/cn'
+import { useI18n } from '../lib/i18n'
 import { Button } from './ui'
 
 type Props = {
@@ -49,6 +50,7 @@ type SubmitState =
   | { kind: 'error'; message: string; hint?: string }
 
 export function ConfirmWithdrawModal(props: Props) {
+  const { t } = useI18n()
   const {
     source,
     dest,
@@ -183,7 +185,7 @@ export function ConfirmWithdrawModal(props: Props) {
     } else {
       setSubmit({
         kind: 'error',
-        message: 'EVM send requires a chain id — cannot proceed.'
+        message: t('evmSendNoChainId')
       })
     }
   }
@@ -200,7 +202,7 @@ export function ConfirmWithdrawModal(props: Props) {
         <button
           onClick={onClose}
           className="absolute top-3 right-3 w-8 h-8 rounded-lg text-fg-muted hover:text-fg hover:bg-white/[0.06] flex items-center justify-center transition-colors z-10"
-          title="Close"
+          title={t('close')}
         >
           <X size={14} />
         </button>
@@ -208,7 +210,7 @@ export function ConfirmWithdrawModal(props: Props) {
         <form onSubmit={doSubmit} className="p-6 space-y-5">
           <div>
             <div className="text-[10px] uppercase tracking-widest text-fg-muted mb-2">
-              Review {source.kind === 'evm' ? 'on-chain transfer' : 'withdrawal'}
+              {t('review')} {source.kind === 'evm' ? t('onChainTransfer') : t('withdrawal')}
             </div>
             <div className="flex items-center gap-3">
               <Pill>{source.name}</Pill>
@@ -220,7 +222,7 @@ export function ConfirmWithdrawModal(props: Props) {
           {/* Summary */}
           <div className="rounded-btn border border-white/[0.06] bg-white/[0.02] divide-y divide-white/[0.04]">
             <Row
-              label="Send"
+              label={t('send')}
               value={
                 <span className="font-mono font-tnum">
                   {amount.toLocaleString('en-US', { maximumFractionDigits: 6 })}{' '}
@@ -229,7 +231,7 @@ export function ConfirmWithdrawModal(props: Props) {
               }
             />
             <Row
-              label="Network"
+              label={t('network')}
               value={
                 <>
                   <span className="font-medium">{network}</span>
@@ -243,7 +245,7 @@ export function ConfirmWithdrawModal(props: Props) {
             />
             {source.kind === 'cex' && (
               <Row
-                label="Exchange fee"
+                label={t('exchangeFee')}
                 value={
                   <span className="font-mono font-tnum">
                     {fee.toLocaleString('en-US', { maximumFractionDigits: 6 })}{' '}
@@ -254,7 +256,7 @@ export function ConfirmWithdrawModal(props: Props) {
             )}
             {source.kind === 'cex' && (
               <Row
-                label="Recipient receives"
+                label={t('recipientReceives')}
                 value={
                   <span className="font-mono font-tnum text-accent font-semibold">
                     {receive.toLocaleString('en-US', {
@@ -266,7 +268,7 @@ export function ConfirmWithdrawModal(props: Props) {
               />
             )}
             <Row
-              label="To address"
+              label={t('toAddress')}
               value={
                 <span className="font-mono text-xs break-all">
                   {address}
@@ -276,7 +278,7 @@ export function ConfirmWithdrawModal(props: Props) {
             />
             {tag && (
               <Row
-                label="Memo / tag"
+                label={t('memoTag')}
                 value={
                   <span className="font-mono text-xs">
                     {tag}
@@ -292,7 +294,7 @@ export function ConfirmWithdrawModal(props: Props) {
             <div className="rounded-btn border border-warn/20 bg-warn/5 p-3">
               <div className="flex items-center gap-2 text-xs text-warn">
                 <AlertTriangle size={12} />
-                Preflight checks disabled in Settings — submitting without dry-run.
+                {t('preflightSkipped')}
               </div>
             </div>
           ) : (
@@ -300,7 +302,7 @@ export function ConfirmWithdrawModal(props: Props) {
               <div className="flex items-center justify-between">
                 <div className="text-[10px] uppercase tracking-widest text-fg-muted inline-flex items-center gap-1.5">
                   <Play size={10} />
-                  Dry run — {source.kind === 'evm' ? 'on-chain simulation' : 'API preflight'}
+                  {t('dryRun')} — {source.kind === 'evm' ? t('onChainSim') : t('apiPreflight')}
                 </div>
                 <Button
                   type="button"
@@ -313,17 +315,17 @@ export function ConfirmWithdrawModal(props: Props) {
                     size={11}
                     className={cn(preflight.kind === 'running' && 'animate-spin')}
                   />
-                  Re-run
+                  {t('rerun')}
                 </Button>
               </div>
 
               {preflight.kind === 'idle' && (
-                <div className="text-xs text-fg-muted">Queued…</div>
+                <div className="text-xs text-fg-muted">{t('queued')}</div>
               )}
               {preflight.kind === 'running' && (
                 <div className="flex items-center gap-2 text-xs text-fg-muted">
                   <Loader2 size={12} className="animate-spin" />
-                  Running checks — no real transaction is sent.
+                  {t('runningChecks')}
                 </div>
               )}
               {preflight.kind === 'done' && (
@@ -341,8 +343,7 @@ export function ConfirmWithdrawModal(props: Props) {
               className="accent-accent mt-0.5"
             />
             <span className="text-xs text-fg-muted leading-relaxed">
-              I confirm I checked the destination address and network. Crypto
-              transactions are irreversible.
+              {t('confirmCheckbox')}
             </span>
           </label>
 
@@ -355,7 +356,7 @@ export function ConfirmWithdrawModal(props: Props) {
               </div>
               {submit.hint && (
                 <div className="text-[11px] text-warn pl-5">
-                  Hint: {submit.hint}
+                  {t('hint')} {submit.hint}
                 </div>
               )}
             </div>
@@ -364,14 +365,14 @@ export function ConfirmWithdrawModal(props: Props) {
             <div className="rounded-btn border border-accent/30 bg-accent/10 p-3 text-xs text-accent flex items-center gap-2">
               <Check size={12} />
               {submit.txHash
-                ? `Broadcasted — ${submit.txHash.slice(0, 10)}…${submit.txHash.slice(-8)}`
-                : 'Submitted. Track it in Activity below.'}
+                ? `${t('broadcasted')} — ${submit.txHash.slice(0, 10)}…${submit.txHash.slice(-8)}`
+                : t('submitted')}
             </div>
           )}
 
           <div className="flex items-center gap-2 justify-end pt-1">
             <Button type="button" variant="ghost" onClick={onClose}>
-              Close
+              {t('close')}
             </Button>
             <Button
               type="submit"
@@ -380,26 +381,26 @@ export function ConfirmWithdrawModal(props: Props) {
               className="min-w-[180px]"
               title={
                 !preflightOk
-                  ? 'Dry run must pass before submitting'
+                  ? t('dryRun.mustPass')
                   : !ack
-                    ? 'Tick the confirmation checkbox'
+                    ? t('confirmCheckboxTick')
                     : undefined
               }
             >
               {submit.kind === 'submitting' ? (
                 <>
                   <Loader2 size={14} className="animate-spin" />
-                  Submitting…
+                  {t('submitting')}
                 </>
               ) : submit.kind === 'ok' ? (
                 <>
                   <Check size={14} />
-                  Done
+                  {t('done')}
                 </>
               ) : (
                 <>
                   <Send size={14} />
-                  {source.kind === 'evm' ? 'Sign & broadcast' : 'Confirm withdrawal'}
+                  {source.kind === 'evm' ? t('signBroadcast') : t('confirmWithdrawal')}
                 </>
               )}
             </Button>
@@ -411,6 +412,7 @@ export function ConfirmWithdrawModal(props: Props) {
 }
 
 function PreflightPanel({ result }: { result: PreflightResult }) {
+  const { t } = useI18n()
   return (
     <div className="space-y-3">
       <div className="space-y-1.5">
@@ -438,8 +440,8 @@ function PreflightPanel({ result }: { result: PreflightResult }) {
         )}
       >
         {result.ok
-          ? 'All checks passed — ready to submit.'
-          : 'Dry run failed — resolve the red rows before submitting.'}
+          ? t('allChecksPassed')
+          : t('dryRunFailed')}
       </div>
     </div>
   )
@@ -497,6 +499,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 function CopyBtn({ text }: { text: string }) {
+  const { t } = useI18n()
   const [copied, setCopied] = useState(false)
   return (
     <button
@@ -508,7 +511,7 @@ function CopyBtn({ text }: { text: string }) {
         setTimeout(() => setCopied(false), 1200)
       }}
       className="ml-2 text-fg-muted hover:text-fg transition-colors align-middle"
-      title={copied ? 'Copied' : 'Copy'}
+      title={copied ? t('copied') : t('copy')}
     >
       <Copy size={12} />
     </button>

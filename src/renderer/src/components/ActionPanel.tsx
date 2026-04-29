@@ -31,6 +31,7 @@ import { SUPPORTED_COINS, type CoinSymbol } from '../data/sources'
 import { GlassCard } from './GlassCard'
 import { Button } from './ui'
 import { cn } from '../lib/cn'
+import { useI18n } from '../lib/i18n'
 
 const WITHDRAW_TYPE = SHARED_WITHDRAW_TYPE
 
@@ -55,6 +56,7 @@ type AddressState =
 type Mode = 'cex-cex' | 'cex-evm' | 'evm-cex' | 'evm-evm' | 'none'
 
 export function ActionPanel({ source, sources, onRefresh }: Props) {
+  const { t } = useI18n()
   const destinations = useMemo(
     () => sources.filter((s) => s.id !== source.id),
     [sources, source.id]
@@ -298,7 +300,7 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
         ? { kind: 'ok', family: sourceFamily }
         : {
             kind: 'bad',
-            reason: `Different chains — ${familyLabel(sourceFamily)} vs ${familyLabel(destFamily)}. Funds will not arrive.`
+            reason: t('differentChains').replace('{a}', familyLabel(sourceFamily)).replace('{b}', familyLabel(destFamily))
           }
     }
     if (mode === 'cex-evm') {
@@ -307,7 +309,7 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
         ? { kind: 'ok', family: sourceFamily }
         : {
             kind: 'bad',
-            reason: `${familyLabel(sourceFamily)} is not EVM-compatible — funds would be lost.`
+            reason: t('notEvmCompatible').replace('{chain}', familyLabel(sourceFamily))
           }
     }
     if (mode === 'evm-cex') {
@@ -315,14 +317,14 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
       if (!isEvmFamily(destFamily)) {
         return {
           kind: 'bad',
-          reason: `${familyLabel(destFamily)} is not EVM-compatible — cannot send from an EVM wallet.`
+          reason: t('cannotSendFromEvm').replace('{chain}', familyLabel(destFamily))
         }
       }
       return sourceFamily === destFamily
         ? { kind: 'ok', family: sourceFamily }
         : {
             kind: 'bad',
-            reason: `Different chains — ${familyLabel(sourceFamily)} vs ${familyLabel(destFamily)}. Funds will not arrive.`
+            reason: t('differentChains').replace('{a}', familyLabel(sourceFamily)).replace('{b}', familyLabel(destFamily))
           }
     }
     if (mode === 'evm-evm') {
@@ -372,7 +374,7 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
             setSelectedAddr(validated[0]!.address)
           } else {
             // Exchange returned address that doesn't match the network format
-            setAddr({ status: 'error', message: 'address format mismatch — try refreshing' })
+            setAddr({ status: 'error', message: t('addrFormatMismatch') })
           }
         } else {
           setAddr({ status: 'error', message: r.error ?? 'failed' })
@@ -453,7 +455,7 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
       <div className="flex items-start gap-3">
         <div className="flex items-center gap-3 shrink-0 h-8">
           <div className="text-[10px] uppercase tracking-widest text-fg-muted">
-            From
+            {t('from')}
           </div>
           <div className="h-8 px-3 rounded-full inline-flex items-center gap-2 bg-white/[0.04] border border-white/[0.08]">
             <span className="text-sm font-medium text-fg">{source.name}</span>
@@ -463,7 +465,7 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
           </div>
           <ArrowRight size={16} className="text-fg-muted" />
           <div className="text-[10px] uppercase tracking-widest text-fg-muted">
-            To
+            {t('to')}
           </div>
         </div>
         <div className="flex gap-1.5 flex-wrap min-w-0">
@@ -481,19 +483,19 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
           ))}
           {destinations.length === 0 && (
             <span className="text-xs text-fg-muted">
-              No other sources configured
+              {t('noOtherSources')}
             </span>
           )}
         </div>
       </div>
 
       {/* Coin */}
-      <Field label="Coin">
+      <Field label={t('coin')}>
         {availableCoins.length === 0 ? (
           <div className="text-xs text-fg-muted">
             {source.balances === null
-              ? 'Loading balances…'
-              : 'No supported coins in this source'}
+              ? t('loadingBalances')
+              : t('noSupportedCoins')}
           </div>
         ) : (
           <div className="flex gap-1.5">
@@ -509,7 +511,7 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
       {/* Networks — mode-aware rendering */}
       <div className="grid grid-cols-2 gap-4">
         {source.kind === 'cex' ? (
-          <Field label="Network to withdraw">
+          <Field label={t('networkWithdraw')}>
             <NetworkPicker
               state={sourceNets}
               selected={withdrawNet}
@@ -523,12 +525,12 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
             />
           </Field>
         ) : (
-          <Field label="Source chain">
+          <Field label={t('sourceChain')}>
             {evmSourceChains.length === 0 ? (
               <div className="text-xs text-fg-muted/70 h-8 flex items-center">
                 {source.balances === null
-                  ? 'Loading…'
-                  : `No ${coin} balance on any EVM chain`}
+                  ? t('loading')
+                  : t('noCoinBalance').replace('{coin}', coin)}
               </div>
             ) : (
               <div className="flex gap-1.5 flex-wrap">
@@ -565,7 +567,7 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
         )}
 
         {dest?.kind === 'cex' ? (
-          <Field label="Network to deposit">
+          <Field label={t('networkDeposit')}>
             <NetworkPicker
               state={destNets}
               selected={depositNet}
@@ -579,9 +581,9 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
             />
           </Field>
         ) : (
-          <Field label={dest?.kind === 'evm' ? 'Destination (EVM)' : 'Destination'}>
+          <Field label={dest?.kind === 'evm' ? `${t('destination')} (EVM)` : t('destination')}>
             <div className="text-xs text-fg-muted/70 h-8 flex items-center">
-              {dest?.kind === 'evm' ? 'Any EVM-compatible network' : '—'}
+              {dest?.kind === 'evm' ? t('anyEvmNetwork') : '—'}
             </div>
           </Field>
         )}
@@ -594,14 +596,14 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
           <span>
             {mode === 'cex-evm' ? (
               <>
-                EVM-compatible:{' '}
+                {t('evmCompatible')}:{' '}
                 <span className="font-medium">
                   {familyLabel(compat.family)}
                 </span>
               </>
             ) : (
               <>
-                Same chain:{' '}
+                {t('sameChain')}:{' '}
                 <span className="font-medium">
                   {familyLabel(compat.family)}
                 </span>
@@ -618,7 +620,7 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
       )}
 
       {/* Deposit address(es) */}
-      <Field label="Deposit to">
+      <Field label={t('depositTo')}>
         <AddressPicker
           state={addr}
           family={addressFamily}
@@ -644,7 +646,7 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
         )}
 
       {/* Amount */}
-      <Field label="Amount">
+      <Field label={t('amount')}>
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <input
@@ -675,19 +677,19 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
         </div>
         <div className="flex items-center justify-between mt-2 text-[11px] font-mono font-tnum text-fg-muted">
           <span>
-            Available:{' '}
+            {t('available')}:{' '}
             <span className="text-fg">
               {maxAmount.toLocaleString('en-US', { maximumFractionDigits: 4 })}{' '}
               {coin}
             </span>
             {source.kind === 'evm' && !withdrawNet && (
-              <span className="text-warn ml-2">pick a source chain</span>
+              <span className="text-warn ml-2">{t('pickSource')}</span>
             )}
           </span>
           <span>
             {withdrawInfo
-              ? `Fee: ${fee} ${coin} · min ${withdrawInfo.minWithdraw ?? 0}`
-              : 'Fee: —'}
+              ? `${t('fee')}: ${fee} ${coin} · min ${withdrawInfo.minWithdraw ?? 0}`
+              : t('feeNone')}
           </span>
         </div>
 
@@ -698,7 +700,7 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
             return (
               <div className="mt-2 text-[11px] text-danger inline-flex items-center gap-1.5">
                 <AlertTriangle size={11} />
-                Exceeds available {maxAmount.toLocaleString('en-US', {
+                {t('exceeds')} {maxAmount.toLocaleString('en-US', {
                   maximumFractionDigits: 4
                 })} {coin}.
               </div>
@@ -711,8 +713,7 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
             return (
               <div className="mt-2 text-[11px] text-danger inline-flex items-center gap-1.5">
                 <AlertTriangle size={11} />
-                Below exchange minimum — need at least{' '}
-                {withdrawInfo.minWithdraw} {coin} for {withdrawInfo.network}.
+                {t('belowMin')} — {withdrawInfo.minWithdraw} {coin} ({withdrawInfo.network})
               </div>
             )
           }
@@ -733,7 +734,8 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
           selectedAddrEntry,
           addressOk,
           amount,
-          maxAmount
+          maxAmount,
+          t
         })
         return (
           <div className="space-y-2">
@@ -749,7 +751,7 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
                   : 'bg-white/[0.04] text-fg-muted cursor-not-allowed'
               )}
             >
-              Review & withdraw
+              {t('reviewWithdraw')}
             </button>
             {!canSubmit && reason && (
               <div className="text-[11px] text-fg-muted text-center">
@@ -800,12 +802,13 @@ function AddressPicker({
   selected: string
   onSelect: (addr: string) => void
 }) {
+  const { t } = useI18n()
   if (state.status === 'idle') {
     return (
       <div className="text-xs text-fg-muted/70 h-8 flex items-center">
         {isEvmDest
-          ? 'Destination address will appear here'
-          : 'Pick a deposit network first'}
+          ? t('destAddressWillAppear')
+          : t('pickNetwork')}
       </div>
     )
   }
@@ -813,7 +816,7 @@ function AddressPicker({
     return (
       <div className="flex items-center gap-2 text-xs text-fg-muted h-8">
         <Loader2 size={12} className="animate-spin" />
-        Fetching deposit address…
+        {t('fetchingDepositAddr')}
       </div>
     )
   }
@@ -830,7 +833,7 @@ function AddressPicker({
     <div className="space-y-1.5">
       {multiple && (
         <div className="text-[11px] text-fg-muted">
-          {state.addresses.length} deposit addresses — pick one to send to.
+          {t('depositAddressesPick').replace('{n}', String(state.addresses.length))}
         </div>
       )}
       <div className="space-y-1.5">
@@ -862,6 +865,7 @@ function AddressRow({
   selectable: boolean
   onSelect: () => void
 }) {
+  const { t } = useI18n()
   const [copied, setCopied] = useState(false)
   const valid = family ? isValidAddress(family, entry.address) : null
 
@@ -926,18 +930,18 @@ function AddressRow({
           type="button"
           onClick={copy}
           className="text-fg-muted hover:text-fg transition-colors shrink-0"
-          title={copied ? 'Copied' : 'Copy'}
+          title={copied ? t('copied') : t('copy')}
         >
           <Copy size={13} />
         </button>
         {copied && (
-          <span className="text-[10px] text-accent shrink-0">copied</span>
+          <span className="text-[10px] text-accent shrink-0">{t('copied')}</span>
         )}
       </Wrapper>
       {valid === false && hint && (
         <div className="text-[10px] text-danger pl-3 flex items-center gap-1.5">
           <AlertTriangle size={10} />
-          Address doesn't match expected format: {hint}
+          {t('addrFormatInvalid').replace('{hint}', hint)}
         </div>
       )}
       {valid === true && hint && !selectable && (
@@ -993,6 +997,7 @@ function disabledReason(args: {
   addressOk: boolean | null
   amount: number
   maxAmount: number
+  t: (key: string) => string
 }): string | null {
   const {
     dest,
@@ -1005,21 +1010,22 @@ function disabledReason(args: {
     selectedAddrEntry,
     addressOk,
     amount,
-    maxAmount
+    maxAmount,
+    t
   } = args
-  if (!dest) return 'Pick a destination.'
+  if (!dest) return t('pickDest')
   if (source.kind === 'cex' && !withdrawInfo)
-    return 'Pick a withdraw network.'
-  if (source.kind === 'evm' && !withdrawNet) return 'Pick a source chain.'
+    return t('pickWithdrawNet')
+  if (source.kind === 'evm' && !withdrawNet) return t('pickSourceChain')
   if ((mode === 'cex-cex' || mode === 'evm-cex') && !depositInfo)
-    return 'Pick a deposit network.'
-  if (compat.kind === 'bad') return compat.reason ?? 'Networks do not match.'
-  if (!selectedAddrEntry) return 'Waiting for deposit address…'
-  if (addressOk === false) return 'Destination address format is invalid.'
-  if (amount <= 0) return 'Enter amount.'
-  if (amount > maxAmount) return `Exceeds available (${maxAmount} max).`
+    return t('pickDepositNet')
+  if (compat.kind === 'bad') return compat.reason ?? t('networksNoMatch')
+  if (!selectedAddrEntry) return t('waitingDepositAddr')
+  if (addressOk === false) return t('destAddrInvalid')
+  if (amount <= 0) return t('enterAmount')
+  if (amount > maxAmount) return t('exceedsAvailableMax').replace('{max}', String(maxAmount))
   if (withdrawInfo && amount < (withdrawInfo.minWithdraw ?? 0))
-    return `Below minimum — need at least ${withdrawInfo.minWithdraw}.`
+    return t('belowMinNeed').replace('{min}', String(withdrawInfo.minWithdraw))
   return null
 }
 
@@ -1075,6 +1081,8 @@ function TransferRow({
     amount > 0 &&
     amount <= fromFree
 
+  const { t } = useI18n()
+
   if (types.length < 2) return null
 
   const run = async () => {
@@ -1109,13 +1117,13 @@ function TransferRow({
   return (
     <div className="rounded-btn border border-warn/25 bg-warn/5 px-3 py-2.5 space-y-2">
       <div className="text-[11px] text-fg-muted">
-        Internal transfer · withdrawals pull from{' '}
-        <span className="uppercase text-fg">{withdrawType}</span> only.{' '}
+        {t('internalTransfer')} · {t('withdrawFrom')}{' '}
+        <span className="uppercase text-fg">{withdrawType}</span> {t('only')}.{' '}
         <span className="font-mono text-fg">
           {totalCex.toLocaleString('en-US', { maximumFractionDigits: 6 })}{' '}
           {coin}
         </span>{' '}
-        total across wallets.
+        {t('totalAcross')}.
       </div>
       <div className="flex items-center gap-2 flex-wrap">
         <TypeSelect
@@ -1176,26 +1184,25 @@ function TransferRow({
           ) : (
             <MoveRight size={11} />
           )}
-          {state.kind === 'running' ? 'Moving…' : 'Transfer'}
+          {state.kind === 'running' ? t('moving') : t('transfer')}
         </Button>
       </div>
       {amount > 0 && amount > fromFree && (
         <div className="text-[11px] text-danger inline-flex items-center gap-1.5">
           <AlertTriangle size={11} />
-          Exceeds {transferTypeLabel(fromType, exchange)} balance ({fromFree}{' '}
-          {coin}).
+          {t('exceedsBalance').replace('{type}', transferTypeLabel(fromType, exchange)).replace('{free}', String(fromFree)).replace('{coin}', coin)}
         </div>
       )}
       {state.kind === 'ok' && (
         <div className="text-[11px] text-accent inline-flex items-center gap-1.5">
-          <Check size={11} /> Transfer submitted — balance will refresh shortly.
+          <Check size={11} /> {t('transferSubmitted')}
         </div>
       )}
       {state.kind === 'error' && (
         <div className="text-[11px] text-danger">
           <div className="font-mono break-all">{state.message}</div>
           {state.hint && (
-            <div className="text-warn mt-0.5">Hint: {state.hint}</div>
+            <div className="text-warn mt-0.5">{t('hint')} {state.hint}</div>
           )}
         </div>
       )}
@@ -1260,11 +1267,12 @@ function NetworkPicker({
   /** 'withdraw' → show fee · eta. 'deposit' → show min deposit · eta. */
   side: 'withdraw' | 'deposit'
 }) {
+  const { t } = useI18n()
   if (state.status === 'idle' || state.status === 'loading') {
     return (
       <div className="flex items-center gap-2 text-xs text-fg-muted h-8">
         <Loader2 size={12} className="animate-spin" />
-        Loading networks…
+        {t('loadingNetworks')}
       </div>
     )
   }
@@ -1280,7 +1288,7 @@ function NetworkPicker({
   if (list.length === 0) {
     return (
       <div className="text-xs text-fg-muted/70 h-8 flex items-center">
-        No networks available
+        {t('noNetworks')}
       </div>
     )
   }

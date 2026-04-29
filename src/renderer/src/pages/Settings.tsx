@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { cn } from '../lib/cn'
+import { useI18n, LANG_OPTIONS } from '../lib/i18n'
 import { ExchangesTab } from '../components/ExchangesTab'
 import { WalletsTab } from '../components/WalletsTab'
 import { RpcsTab } from '../components/RpcsTab'
@@ -15,25 +16,47 @@ type Props = {
 
 export function SettingsPage({ onWiped }: Props) {
   const [tab, setTab] = useState<Tab>('setup')
+  const { t, lang, setLang } = useI18n()
   return (
     <div className="flex-1 overflow-y-auto relative z-10">
       <div className="max-w-5xl mx-auto px-8 py-8 space-y-5">
-        <h1 className="text-2xl font-semibold">Settings</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">{t('settings.title')}</h1>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-fg-muted">{t('language')}</span>
+            <div className="flex gap-0.5 rounded-btn border border-white/[0.08] overflow-hidden">
+              {LANG_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setLang(opt.value)}
+                  className={cn(
+                    'px-2.5 h-7 text-[11px] font-medium transition-colors',
+                    lang === opt.value
+                      ? 'bg-accent/[0.15] text-accent'
+                      : 'text-fg-muted hover:text-fg hover:bg-white/[0.04]'
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
         <div className="flex gap-1 border-b border-white/[0.06]">
           <TabBtn active={tab === 'setup'} onClick={() => setTab('setup')}>
-            Setup
+            {t('tab.setup')}
           </TabBtn>
           <TabBtn
             active={tab === 'exchanges'}
             onClick={() => setTab('exchanges')}
           >
-            Exchanges
+            {t('tab.exchanges')}
           </TabBtn>
           <TabBtn active={tab === 'wallets'} onClick={() => setTab('wallets')}>
-            Wallets
+            {t('tab.wallets')}
           </TabBtn>
           <TabBtn active={tab === 'rpcs'} onClick={() => setTab('rpcs')}>
-            RPCs
+            {t('tab.rpcs')}
           </TabBtn>
           <TabBtn
             active={tab === 'statistics'}
@@ -45,7 +68,7 @@ export function SettingsPage({ onWiped }: Props) {
             active={tab === 'security'}
             onClick={() => setTab('security')}
           >
-            Security
+            {t('tab.security')}
           </TabBtn>
         </div>
 

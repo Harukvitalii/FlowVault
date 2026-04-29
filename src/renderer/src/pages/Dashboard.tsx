@@ -8,6 +8,7 @@ import { ActivityPanel } from '../components/ActivityPanel'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { Button } from '../components/ui'
 import { cn } from '../lib/cn'
+import { useI18n } from '../lib/i18n'
 
 function useNow(intervalMs = 15_000): number {
   const [now, setNow] = useState(() => Date.now())
@@ -35,6 +36,7 @@ type DashboardProps = {
 }
 
 export function DashboardPage({ hideBalances, onToggleHide }: DashboardProps) {
+  const { t } = useI18n()
   const [sources, setSources] = useState<Source[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loadingMeta, setLoadingMeta] = useState(true)
@@ -187,7 +189,7 @@ export function DashboardPage({ hideBalances, onToggleHide }: DashboardProps) {
                       refreshing && 'text-accent'
                     )}
                   >
-                    {refreshing ? 'refreshing…' : `updated ${ago}`}
+                    {refreshing ? t('refreshing') : `${t('updated')} ${ago}`}
                   </span>
                 )}
                 <Button
@@ -200,7 +202,7 @@ export function DashboardPage({ hideBalances, onToggleHide }: DashboardProps) {
                     size={12}
                     className={cn(refreshing && 'animate-spin')}
                   />
-                  Refresh
+                  {t('refresh')}
                 </Button>
               </div>
             </div>
@@ -232,7 +234,7 @@ export function DashboardPage({ hideBalances, onToggleHide }: DashboardProps) {
         <div className="max-w-6xl mx-auto px-8 py-8 space-y-6">
           <section>
             <SectionHeader
-              label="Sources"
+              label={t('sources')}
               right={
                 sources.length > 0 && (
                   <div className="flex items-center gap-3">
@@ -243,13 +245,13 @@ export function DashboardPage({ hideBalances, onToggleHide }: DashboardProps) {
                           refreshing && 'text-accent'
                         )}
                       >
-                        {refreshing ? 'refreshing…' : `updated ${ago}`}
+                        {refreshing ? t('refreshing') : `${t('updated')} ${ago}`}
                       </span>
                     )}
                     <button
                       onClick={onToggleHide}
                       className="w-8 h-8 rounded-btn flex items-center justify-center text-fg-muted hover:text-fg hover:bg-white/[0.04] transition-colors"
-                      title={hideBalances ? 'Show balances' : 'Hide balances'}
+                      title={hideBalances ? t('showBalances') : t('hideBalances')}
                     >
                       {hideBalances ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
@@ -263,7 +265,7 @@ export function DashboardPage({ hideBalances, onToggleHide }: DashboardProps) {
                         size={12}
                         className={cn(refreshing && 'animate-spin')}
                       />
-                      Refresh
+                      {t('refresh')}
                     </Button>
                   </div>
                 )
@@ -327,11 +329,12 @@ function GridSkeleton() {
 }
 
 function EmptyState() {
+  const { t } = useI18n()
   return (
     <div className="rounded-card border border-white/[0.06] bg-white/[0.02] p-10 text-center">
-      <div className="text-sm text-fg mb-1">No sources configured yet</div>
+      <div className="text-sm text-fg mb-1">{t('noSources')}</div>
       <div className="text-xs text-fg-muted">
-        Add an exchange account or EVM wallet in Settings to begin.
+        {t('noSources.desc')}
       </div>
     </div>
   )
