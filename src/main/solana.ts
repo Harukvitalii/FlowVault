@@ -3,7 +3,13 @@
  * Uses @solana/web3.js for RPC calls and transaction building.
  */
 
-import {
+import * as solanaWeb3 from '@solana/web3.js'
+import * as splToken from '@solana/spl-token'
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+import bs58 from 'bs58'
+import type { Balance } from '../shared/types'
+
+const {
   Connection,
   Keypair,
   LAMPORTS_PER_SOL,
@@ -11,15 +17,14 @@ import {
   SystemProgram,
   Transaction,
   sendAndConfirmTransaction
-} from '@solana/web3.js'
-import {
+} = solanaWeb3
+
+const {
   createTransferInstruction,
   getAssociatedTokenAddress,
   getAccount,
   createAssociatedTokenAccountInstruction
-} from '@solana/spl-token'
-import bs58 from 'bs58'
-import type { Balance } from '../shared/types'
+} = splToken
 
 const DEFAULT_RPC = 'https://api.mainnet-beta.solana.com'
 const TIMEOUT_MS = 15_000
@@ -40,7 +45,7 @@ const SPL_TOKENS: { symbol: string; mint: string; decimals: number }[] = [
 
 const STABLES = new Set(['USDC', 'USDT'])
 
-function getConnection(rpcUrl?: string): Connection {
+function getConnection(rpcUrl?: string): solanaWeb3.Connection {
   return new Connection(rpcUrl ?? DEFAULT_RPC, {
     commitment: 'confirmed',
     confirmTransactionInitialTimeout: TIMEOUT_MS
@@ -53,7 +58,7 @@ function getConnection(rpcUrl?: string): Connection {
  * Validate and parse a Solana private key.
  * Accepts base58-encoded secret key (64 bytes = 88 chars base58).
  */
-export function parseSecretKey(raw: string): Keypair {
+export function parseSecretKey(raw: string): solanaWeb3.Keypair {
   const trimmed = raw.trim()
   // Try base58 first
   try {

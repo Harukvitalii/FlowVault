@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { readFile, writeFile } from 'node:fs/promises'
+import { chmod, readFile, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type {
@@ -75,12 +75,14 @@ function scheduleWrite() {
   writeTimer = setTimeout(() => {
     writeTimer = null
     const snapshot = JSON.stringify(inMem)
-    writeFile(cachePath(), snapshot).catch((err) => {
-      console.warn(
-        '[cache-store] write failed:',
-        err instanceof Error ? err.message : err
-      )
-    })
+    writeFile(cachePath(), snapshot, { mode: 0o600 })
+      .then(() => chmod(cachePath(), 0o600).catch(() => undefined))
+      .catch((err) => {
+        console.warn(
+          '[cache-store] write failed:',
+          err instanceof Error ? err.message : err
+        )
+      })
   }, WRITE_DEBOUNCE_MS)
 }
 

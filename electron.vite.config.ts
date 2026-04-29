@@ -7,7 +7,12 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
     build: {
       rollupOptions: {
-        input: resolve(__dirname, 'src/main/index.ts')
+        input: resolve(__dirname, 'src/main/index.ts'),
+        external: [
+          '@solana/web3.js',
+          '@solana/spl-token',
+          'bs58'
+        ]
       }
     }
   },

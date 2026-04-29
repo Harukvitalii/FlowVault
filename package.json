@@ -2,7 +2,20 @@
   "name": "flowvault",
   "version": "0.1.0",
   "private": true,
-  "description": "Manage withdrawals across CEX exchanges and crypto wallets",
+  "description": "Manage withdrawals across CEX exchanges and crypto wallets. Local-first, AES-256-GCM encrypted vault.",
+  "license": "MIT",
+  "author": {
+    "name": "Vitalii H",
+    "email": "dropharuk@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Harukvitalii/flowvault.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Harukvitalii/flowvault/issues"
+  },
+  "homepage": "https://github.com/Harukvitalii/flowvault#readme",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -13,7 +26,10 @@
     "dist": "npm run build && electron-builder",
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:win": "npm run build && electron-builder --win",
-    "dist:linux": "npm run build && electron-builder --linux"
+    "dist:linux": "npm run build && electron-builder --linux",
+    "build:mac": "npm run dist:mac",
+    "build:win": "npm run dist:win",
+    "build:linux": "npm run dist:linux"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

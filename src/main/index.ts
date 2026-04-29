@@ -1,9 +1,10 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, session, shell } from 'electron'
 import { join } from 'node:path'
 import {
   addWallet,
   changeMasterKey,
   createVault,
+  getWalletKeyAndNetwork,
   listExchanges,
   listRpcs,
   listWallets,
@@ -122,7 +123,8 @@ function createWindow() {
   })
 
   win.webContents.setWindowOpenHandler((details) => {
-    if (/^https?:\/\//i.test(details.url)) {
+    // Only allow https — never bare http or file:// / javascript: schemes.
+    if (/^https:\/\//i.test(details.url)) {
       shell.openExternal(details.url)
     }
     return { action: 'deny' }
@@ -152,6 +154,13 @@ app.on('second-instance', () => {
 })
 
 app.whenReady().then(async () => {
+  // Defense in depth: deny every renderer permission request (mic, camera,
+  // geolocation, notifications, midi, etc.). The app never asks for any.
+  session.defaultSession.setPermissionRequestHandler((_w, _p, callback) =>
+    callback(false)
+  )
+  session.defaultSession.setPermissionCheckHandler(() => false)
+
   // Load on-disk caches (networks + deposit addresses) so first session-clicks
   // don't hit the network.
   await loadFromDisk()
@@ -330,8 +339,13 @@ app.whenReady().then(async () => {
   )
   ipcMain.handle('solana:send', (_e, input: unknown) => {
     const o = obj(input)
+    const walletId = str(o.walletId)
+    const w = getWalletKeyAndNetwork(walletId)
+    if (!w || w.network !== 'SOL') {
+      return { ok: false, error: 'wallet not found or not a Solana wallet' }
+    }
     return sendSolanaTransfer({
-      secretKey: str(o.secretKey),
+      secretKey: w.privateKey,
       toAddress: str(o.toAddress),
       coin: str(o.coin),
       amount: num(o.amount)

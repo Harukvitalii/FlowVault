@@ -377,7 +377,7 @@ export interface Api {
   }
   solana: {
     send: (input: {
-      secretKey: string
+      walletId: string
       toAddress: string
       coin: string
       amount: number

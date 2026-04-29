@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import { chmod, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -95,8 +95,11 @@ async function persist(keyForEncrypt?: Buffer, saltForFile?: Buffer) {
   ])
   const tag = cipher.getAuthTag()
   const tmp = vaultPath() + '.tmp'
-  await writeFile(tmp, Buffer.concat([salt, iv, tag, payload]))
+  await writeFile(tmp, Buffer.concat([salt, iv, tag, payload]), { mode: 0o600 })
   await rename(tmp, vaultPath())
+  // Belt + braces: ensure final file is owner-only readable. Silently ignored
+  // on Windows where POSIX modes don't apply.
+  await chmod(vaultPath(), 0o600).catch(() => undefined)
 }
 
 async function readSalt(): Promise<Buffer> {
@@ -367,6 +370,22 @@ export function getWalletByAddress(address: string): {
     }
   }
   return null
+}
+
+/**
+ * Internal API — main process only. Never expose via IPC.
+ * Returns the raw key + network for any wallet kind (EVM 0x-hex or Solana
+ * base58/JSON). Used by main/index.ts to resolve a Solana send from a
+ * walletId without exposing the key over IPC.
+ */
+export function getWalletKeyAndNetwork(walletId: string): {
+  privateKey: string
+  network?: string
+} | null {
+  if (!unlockedData) return null
+  const w = unlockedData.wallets[walletId]
+  if (!w?.privateKey) return null
+  return { privateKey: w.privateKey, network: w.network }
 }
 
 /**

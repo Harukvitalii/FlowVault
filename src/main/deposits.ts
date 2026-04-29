@@ -5,7 +5,7 @@
  */
 
 import { app, BrowserWindow } from 'electron'
-import { readFile, rename, writeFile } from 'node:fs/promises'
+import { chmod, readFile, rename, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { getExchangeCreds, listExchanges } from './vault'
@@ -50,8 +50,9 @@ function scheduleWrite() {
   writeTimer = setTimeout(() => {
     writeTimer = null
     const tmp = filePath() + '.tmp'
-    writeFile(tmp, JSON.stringify(records))
+    writeFile(tmp, JSON.stringify(records), { mode: 0o600 })
       .then(() => rename(tmp, filePath()))
+      .then(() => chmod(filePath(), 0o600).catch(() => undefined))
       .catch((err) => {
         console.warn('[deposits] write failed:', err instanceof Error ? err.message : err)
       })

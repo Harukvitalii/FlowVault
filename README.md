@@ -59,7 +59,9 @@ FlowVault consolidates multi-exchange crypto management into one interface:
 | **Navigation blocked** | `will-navigate` prevented, `shell.openExternal` validates `https://` only |
 | **IPC validation** | All renderer→main IPC arguments validated at runtime |
 | **Atomic writes** | Vault and history files use tmp+rename to prevent corruption |
-| **No telemetry** | Zero data leaves your machine. No analytics, no tracking. |
+| **File permissions** | Vault, history, and cache files written with `mode 0o600` (owner-only) on POSIX |
+| **Permissions denied** | Renderer denied mic, camera, geolocation, notifications, and all browser permission prompts |
+| **No telemetry** | No analytics, no tracking, no auto-update calls. Outgoing requests are limited to those you initiate (CEX API, EVM/Solana RPC) plus Google Fonts and `api.ipify.org` for public-IP detection on the Setup tab. |
 
 ## Architecture
 

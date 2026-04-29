@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { existsSync } from 'node:fs'
-import { readFile, writeFile } from 'node:fs/promises'
+import { chmod, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { CoinNetworkPair, UserPrefs } from '../shared/types'
 
@@ -91,7 +91,8 @@ export async function getPrefs(): Promise<UserPrefs> {
 export async function savePrefs(next: UserPrefs): Promise<{ ok: boolean }> {
   try {
     const clean = sanitize(next)
-    await writeFile(filePath(), JSON.stringify(clean, null, 2))
+    await writeFile(filePath(), JSON.stringify(clean, null, 2), { mode: 0o600 })
+    await chmod(filePath(), 0o600).catch(() => undefined)
     cached = clean
     return { ok: true }
   } catch (err) {
