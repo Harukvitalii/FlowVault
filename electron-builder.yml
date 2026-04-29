@@ -1,5 +1,5 @@
-appId: com.withdrawhelper.app
-productName: Withdraw Helper
+appId: com.flowvault.app
+productName: FlowVault
 copyright: Copyright © 2026
 
 directories:
@@ -53,7 +53,7 @@ nsis:
   deleteAppDataOnUninstall: false
   createDesktopShortcut: always
   createStartMenuShortcut: true
-  shortcutName: Withdraw Helper
+  shortcutName: FlowVault
 
 linux:
   category: Finance
@@ -62,6 +62,9 @@ linux:
       arch:
         - x64
     - target: deb
+      arch:
+        - x64
+    - target: tar.gz
       arch:
         - x64
 

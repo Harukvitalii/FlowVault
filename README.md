@@ -5,7 +5,7 @@
   <img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind" />
 </p>
 
-<h1 align="center">Withdraw Helper</h1>
+<h1 align="center">FlowVault</h1>
 
 <p align="center">
   <b>Manage withdrawals across multiple CEX exchanges and EVM wallets</b> from a single desktop app.
@@ -22,7 +22,7 @@
 
 ## What it does
 
-Withdraw Helper consolidates multi-exchange crypto management into one interface:
+FlowVault consolidates multi-exchange crypto management into one interface:
 
 - **Withdraw from any CEX** to any other CEX or EVM wallet in a few clicks
 - **On-chain EVM transfers** directly from your wallet (sign & broadcast)

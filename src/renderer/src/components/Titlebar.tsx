@@ -23,7 +23,7 @@ export function Titlebar({ unlocked, onLock, onOpenSettings, current }: Props) {
     >
       {/* macOS: leave space for traffic lights */}
       <div className={cn('flex items-center', isMac ? 'pl-20' : 'pl-4')}>
-        <span className="text-fg font-semibold tracking-wide">Withdraw Helper</span>
+        <span className="text-fg font-semibold tracking-wide">FlowVault</span>
       </div>
 
       <div className="flex-1" />
