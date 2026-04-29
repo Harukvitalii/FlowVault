@@ -228,7 +228,7 @@ export function DashboardPage({ hideBalances, onToggleHide }: DashboardProps) {
 
   // ---- Grid view ----
   return (
-    <div className="flex-1 flex flex-col relative z-10">
+    <div className="flex-1 min-h-0 flex flex-col relative z-10">
       <RpcTicker />
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="max-w-6xl mx-auto px-8 py-8 space-y-6">

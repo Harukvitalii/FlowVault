@@ -8,12 +8,14 @@ import {
   Info,
   Loader2,
   Monitor,
-  RefreshCw
+  RefreshCw,
+  Terminal
 } from 'lucide-react'
 import type { UserPrefs } from '@shared/types'
 import { GlassCard } from './GlassCard'
 import { Button } from './ui'
 import { cn } from '../lib/cn'
+import { useI18n, LANG_OPTIONS } from '../lib/i18n'
 import { WhitelistAddressesCard } from './WhitelistAddressesCard'
 
 type DetectState =
@@ -63,6 +65,9 @@ export function SetupTab() {
 
   return (
     <div className="space-y-6">
+      {/* Language */}
+      <LanguageCard />
+
       {/* Deposit monitoring toggle */}
       <DepositMonitorCard />
 
@@ -325,8 +330,49 @@ export function SetupTab() {
             'Enable IPv4 → enter IP, subnet, gateway, DNS'
           ]}
         />
+        <PlatformBlock
+          active={platform === 'linux'}
+          icon={<Terminal size={14} />}
+          title="Linux"
+          steps={[
+            'nmcli: nmcli con mod "Connection" ipv4.addresses 192.168.1.100/24 ipv4.method manual',
+            'netplan (Ubuntu): edit /etc/netplan/*.yaml → set addresses, gateway4, nameservers',
+            'Arch: systemctl enable/start systemd-networkd → edit /etc/systemd/network/*.network',
+            'Or GUI: Network Manager → IPv4 Settings → Manual → Add IP, netmask, gateway'
+          ]}
+        />
       </GlassCard>
     </div>
+  )
+}
+
+function LanguageCard() {
+  const { t, lang, setLang } = useI18n()
+  return (
+    <GlassCard className="p-5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Globe size={16} className="text-accent" />
+          <h3 className="text-sm font-semibold text-fg">{t('language')}</h3>
+        </div>
+        <div className="flex gap-0.5 rounded-btn border border-white/[0.08] overflow-hidden">
+          {LANG_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setLang(opt.value)}
+              className={cn(
+                'px-3 h-8 text-xs font-medium transition-colors',
+                lang === opt.value
+                  ? 'bg-accent/[0.15] text-accent'
+                  : 'text-fg-muted hover:text-fg hover:bg-white/[0.04]'
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </GlassCard>
   )
 }
 
@@ -515,11 +561,12 @@ function PlatformBlock({
   )
 }
 
-function detectPlatform(): 'mac' | 'windows' | 'other' {
+function detectPlatform(): 'mac' | 'windows' | 'linux' | 'other' {
   if (typeof navigator === 'undefined') return 'other'
   const p = navigator.platform?.toLowerCase() ?? ''
   const ua = navigator.userAgent?.toLowerCase() ?? ''
   if (p.includes('mac') || ua.includes('mac os')) return 'mac'
   if (p.includes('win') || ua.includes('windows')) return 'windows'
+  if (p.includes('linux') || ua.includes('linux')) return 'linux'
   return 'other'
 }

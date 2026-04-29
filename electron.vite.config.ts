@@ -17,7 +17,15 @@ export default defineConfig({
           '@solana/web3.js',
           '@solana/spl-token',
           'bs58'
-        ]
+        ],
+        // Pin the main entry to ESM .mjs on every platform so package.json
+        // "main" stays consistent regardless of the host's Vite/rolldown
+        // version (Vite v5 defaults to .js, Vite v8 to .mjs).
+        output: {
+          format: 'es',
+          entryFileNames: '[name].mjs',
+          chunkFileNames: 'chunks/[name]-[hash].mjs'
+        }
       }
     }
   },
