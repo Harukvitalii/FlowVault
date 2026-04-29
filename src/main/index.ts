@@ -387,3 +387,25 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
+
+// Defensive teardown: stop every poller and interval before the main process
+// exits so helper processes can't outlive the main one. Runs once even if the
+// app is closed via OS signal, taskkill, or Electron's lifecycle.
+let teardownDone = false
+function teardown() {
+  if (teardownDone) return
+  teardownDone = true
+  try {
+    invalidateAllClients()
+  } catch { /* ignore */ }
+  try {
+    stopBackgroundPinger()
+  } catch { /* ignore */ }
+  try {
+    stopDepositPoller()
+  } catch { /* ignore */ }
+}
+
+app.on('before-quit', teardown)
+app.on('will-quit', teardown)
+process.on('exit', teardown)
