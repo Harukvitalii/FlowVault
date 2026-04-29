@@ -31,7 +31,7 @@ FlowVault consolidates multi-exchange crypto management into one interface:
 - **Internal transfers** between exchange sub-accounts (spot, futures, funding)
 - **Activity feed** with real-time withdrawal and deposit tracking
 
-## Supported Exchanges
+## Supported Exchanges & Wallets
 
 | Exchange | Balances | Withdraw | Deposit Addr | Deposit Monitor |
 |----------|:--------:|:--------:|:------------:|:---------------:|
@@ -45,7 +45,12 @@ FlowVault consolidates multi-exchange crypto management into one interface:
 | MEXC     | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
 | Phemex   | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
 
-**EVM Chains:** Ethereum, Arbitrum, Base, Optimism, BSC, Polygon — with automatic RPC failover and latency-based routing.
+| Wallet | Balances | Send | Watch-only |
+|--------|:--------:|:----:|:----------:|
+| EVM (Ethereum, Arbitrum, Base, Optimism, BSC, Polygon) | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| Solana (SOL, USDC, USDT) | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+
+**EVM Chains:** Automatic RPC failover and latency-based routing across all supported chains.
 
 ## Security
 

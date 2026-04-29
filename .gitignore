@@ -67,3 +67,5 @@ docs/superpowers/specs
 plan
 .superpowers
 .claude
+tsconfig.node.tsbuildinfo
+tsconfig.web.tsbuildinfo
