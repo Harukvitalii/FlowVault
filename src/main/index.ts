@@ -1,5 +1,10 @@
 import { app, BrowserWindow, ipcMain, session, shell } from 'electron'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+// ESM build: polyfill CommonJS-style __dirname so `join(__dirname, …)` keeps
+// working after electron-vite emits index.mjs.
+const __dirname = dirname(fileURLToPath(import.meta.url))
 import {
   addWallet,
   changeMasterKey,
