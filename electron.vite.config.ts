@@ -9,6 +9,10 @@ export default defineConfig({
       rollupOptions: {
         input: resolve(__dirname, 'src/main/index.ts'),
         external: [
+          'ccxt',
+          /^ccxt\//,
+          'protobufjs',
+          /^protobufjs\//,
           '@solana/web3.js',
           '@solana/spl-token',
           'bs58'

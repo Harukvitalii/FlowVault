@@ -33,8 +33,8 @@ FlowVault consolidates multi-exchange crypto management into one interface:
 
 ## Supported Exchanges & Wallets
 
-| Exchange | Balances | Withdraw | Deposit Addr | Deposit Monitor |
-|----------|:--------:|:--------:|:------------:|:---------------:|
+| Source | Balances | Withdraw | Deposit Addr | Deposit Monitor |
+|--------|:--------:|:--------:|:------------:|:---------------:|
 | Binance  | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
 | Bybit    | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
 | OKX      | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
@@ -44,13 +44,11 @@ FlowVault consolidates multi-exchange crypto management into one interface:
 | HTX      | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
 | MEXC     | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
 | Phemex   | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| EVM Wallets | :white_check_mark: | :white_check_mark: | :white_check_mark: | — |
+| Solana Wallets | :white_check_mark: | :white_check_mark: | :white_check_mark: | — |
 
-| Wallet | Balances | Send | Watch-only |
-|--------|:--------:|:----:|:----------:|
-| EVM (Ethereum, Arbitrum, Base, Optimism, BSC, Polygon) | :white_check_mark: | :white_check_mark: | :white_check_mark: |
-| Solana (SOL, USDC, USDT) | :white_check_mark: | :white_check_mark: | :white_check_mark: |
-
-**EVM Chains:** Automatic RPC failover and latency-based routing across all supported chains.
+**EVM Chains:** Ethereum, Arbitrum, Base, Optimism, BSC, Polygon — automatic RPC failover and latency-based routing.
+**Solana:** SOL, USDC, USDT balances and transfers.
 
 ## Security
 
