@@ -909,13 +909,82 @@ export async function getDepositAddresses(
           tag: (typeof r.memo === 'string' && r.memo) ? r.memo : undefined
         }))
       if (addresses.length === 0) {
-        return { ok: false, error: 'no deposit address — generate one on the MEXC website first' }
+        return { ok: false, error: 'exchange returned no address' }
       }
       cachedSetAddresses(accountId, coin, network, addresses)
       return { ok: true, addresses }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'failed'
       return { ok: false, error: msg }
+    }
+  }
+
+  // KuCoin: resolve the chain ID from the currency's network info (e.g. BEP20 → bsc)
+  // and call the raw deposit address endpoint with that ID.
+  if (creds?.exchange === 'kucoin') {
+    const cached = cachedGetAddresses(accountId, coin, network)
+    if (cached) return { ok: true, addresses: cached.addresses }
+    try {
+      const client = getClient(accountId)
+      await (client as unknown as { loadMarkets: () => Promise<void> }).loadMarkets()
+      const currency = (client.currencies as Record<string, { networks?: Record<string, { id?: string }> }>)?.[coin.toUpperCase()]
+      const chainId = currency?.networks?.[network]?.id ?? network.toLowerCase()
+      const res = (await withTimeout(
+        (client as unknown as {
+          privateGetDepositAddresses: (params: Record<string, string>) => Promise<unknown>
+        }).privateGetDepositAddresses({
+          currency: coin.toUpperCase(),
+          chain: chainId
+        }),
+        ADDRESS_TIMEOUT_MS,
+        'kucoinDepositAddress'
+      )) as { data?: unknown }
+      const raw = res?.data
+      const list = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? [raw] : [])
+      const addresses: DepositAddressEntry[] = (list as Array<Record<string, unknown>>)
+        .filter((r) => typeof r.address === 'string' && r.address)
+        .map((r) => ({ address: r.address as string, tag: (typeof r.memo === 'string' && r.memo) ? r.memo : undefined }))
+      if (addresses.length === 0) return { ok: false, error: 'No deposit address — create one on the KuCoin website first' }
+      cachedSetAddresses(accountId, coin, network, addresses)
+      return { ok: true, addresses }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'failed'
+      if (msg.includes('204000') || msg.includes('null')) {
+        return { ok: false, error: 'No deposit address for this network — create one on the KuCoin website first' }
+      }
+      return { ok: false, error: msg }
+    }
+  }
+
+  // Bitget: resolve the raw chain name from currency info (e.g. APT → Aptos).
+  if (creds?.exchange === 'bitget') {
+    const cached = cachedGetAddresses(accountId, coin, network)
+    if (cached) return { ok: true, addresses: cached.addresses }
+    try {
+      const client = getClient(accountId)
+      await (client as unknown as { loadMarkets: () => Promise<void> }).loadMarkets()
+      const currency = (client.currencies as Record<string, { networks?: Record<string, { info?: { chain?: string } }> }>)?.[coin.toUpperCase()]
+      const rawChain = currency?.networks?.[network]?.info?.chain ?? network
+      const res = (await withTimeout(
+        (client as unknown as {
+          privateSpotGetV2SpotWalletDepositAddress: (params: Record<string, string>) => Promise<unknown>
+        }).privateSpotGetV2SpotWalletDepositAddress({
+          coin: coin.toUpperCase(),
+          chain: rawChain
+        }),
+        ADDRESS_TIMEOUT_MS,
+        'bitgetDepositAddress'
+      )) as { data?: { address?: string; tag?: string } }
+      const addr = res?.data?.address
+      if (!addr) return { ok: false, error: 'exchange returned no address' }
+      const addresses: DepositAddressEntry[] = [{
+        address: addr,
+        tag: res.data?.tag || undefined
+      }]
+      cachedSetAddresses(accountId, coin, network, addresses)
+      return { ok: true, addresses }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : 'failed' }
     }
   }
 

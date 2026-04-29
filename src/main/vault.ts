@@ -459,6 +459,44 @@ export async function addWallet(
 
   // Full wallet: derive address from private key.
   if (!input.privateKey) return { ok: false, error: 'private key or address is required' }
+
+  // Solana wallet
+  if (input.network === 'SOL') {
+    try {
+      const { deriveAddress } = await import('./solana')
+      const address = deriveAddress(input.privateKey)
+      const duplicate = Object.values(unlockedData!.wallets).some(
+        (w) => w.address === address
+      )
+      if (duplicate) return { ok: false, error: 'wallet already exists' }
+      const id = randomUUID()
+      const record: WalletRecord = {
+        id,
+        label: input.label?.trim() || `SOL Wallet ${Object.keys(unlockedData!.wallets).length + 1}`,
+        address,
+        privateKey: input.privateKey.trim(),
+        network: 'SOL',
+        createdAt: Date.now()
+      }
+      unlockedData!.wallets[id] = record
+      await persist()
+      return {
+        ok: true,
+        wallet: {
+          id: record.id,
+          label: record.label,
+          address: record.address,
+          network: 'SOL',
+          canSend: true,
+          createdAt: record.createdAt
+        }
+      }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : 'invalid Solana key' }
+    }
+  }
+
+  // EVM wallet
   let pk: `0x${string}`
   try {
     pk = normalizePk(input.privateKey)

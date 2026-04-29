@@ -206,6 +206,7 @@ export function WalletsTab() {
 function AddKeyWalletForm({ onDone }: { onDone: () => void }) {
   const [label, setLabel] = useState('')
   const [pk, setPk] = useState('')
+  const [walletType, setWalletType] = useState<'EVM' | 'SOL'>('EVM')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -215,7 +216,8 @@ function AddKeyWalletForm({ onDone }: { onDone: () => void }) {
     setBusy(true)
     const r = await window.api.wallets.add({
       label: label || undefined,
-      privateKey: pk
+      privateKey: pk,
+      network: walletType === 'SOL' ? 'SOL' : undefined
     })
     setBusy(false)
     if (!r.ok) setError(r.error ?? 'Failed')
@@ -227,6 +229,34 @@ function AddKeyWalletForm({ onDone }: { onDone: () => void }) {
       <div className="text-[10px] uppercase tracking-widest text-fg-muted mb-2">
         Full wallet — can send transactions
       </div>
+      <Row label="Chain">
+        <div className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={() => setWalletType('EVM')}
+            className={cn(
+              'h-9 px-4 rounded-btn text-xs font-medium border transition-colors',
+              walletType === 'EVM'
+                ? 'bg-accent/[0.12] border-accent/50 text-accent'
+                : 'bg-white/[0.03] border-white/[0.08] text-fg-muted hover:text-fg'
+            )}
+          >
+            EVM
+          </button>
+          <button
+            type="button"
+            onClick={() => setWalletType('SOL')}
+            className={cn(
+              'h-9 px-4 rounded-btn text-xs font-medium border transition-colors',
+              walletType === 'SOL'
+                ? 'bg-accent/[0.12] border-accent/50 text-accent'
+                : 'bg-white/[0.03] border-white/[0.08] text-fg-muted hover:text-fg'
+            )}
+          >
+            Solana
+          </button>
+        </div>
+      </Row>
       <Row label="Label (optional)">
         <Input
           value={label}
@@ -234,13 +264,13 @@ function AddKeyWalletForm({ onDone }: { onDone: () => void }) {
           placeholder="e.g. Main EVM"
         />
       </Row>
-      <Row label="Private key (0x... 64 hex chars)">
+      <Row label={walletType === 'SOL' ? 'Private key (base58 or JSON array)' : 'Private key (0x... 64 hex chars)'}>
         <Input
           mono
           type="password"
           value={pk}
           onChange={(e) => setPk(e.target.value)}
-          placeholder="0x…"
+          placeholder={walletType === 'SOL' ? 'base58 secret key…' : '0x…'}
           autoComplete="new-password"
         />
       </Row>

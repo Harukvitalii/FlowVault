@@ -67,7 +67,18 @@ export function ConfirmWithdrawModal(props: Props) {
   const [ack, setAck] = useState(false)
   const [preflight, setPreflight] = useState<PreflightState>({ kind: 'idle' })
   const [submit, setSubmit] = useState<SubmitState>({ kind: 'idle' })
+  const [skipPreflight, setSkipPreflight] = useState(false)
   const submitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Check if preflight is disabled in settings.
+  useEffect(() => {
+    window.api.prefs.get().then((p) => {
+      if (p.skipPreflight) {
+        setSkipPreflight(true)
+        setPreflight({ kind: 'done', result: { ok: true, checks: [] } })
+      }
+    })
+  }, [])
 
   // Cleanup timeout on unmount to avoid state updates on unmounted component.
   useEffect(() => {
@@ -118,8 +129,8 @@ export function ConfirmWithdrawModal(props: Props) {
 
   // Auto-run preflight on open and when relevant inputs change.
   useEffect(() => {
-    runPreflight()
-  }, [source.id, coin, amount, address, network, chainId])
+    if (!skipPreflight) runPreflight()
+  }, [source.id, coin, amount, address, network, chainId, skipPreflight])
 
   const preflightOk =
     preflight.kind === 'done' && preflight.result.ok
@@ -277,40 +288,49 @@ export function ConfirmWithdrawModal(props: Props) {
           </div>
 
           {/* Preflight */}
-          <div className="rounded-btn border border-white/[0.08] bg-white/[0.02] p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="text-[10px] uppercase tracking-widest text-fg-muted inline-flex items-center gap-1.5">
-                <Play size={10} />
-                Dry run — {source.kind === 'evm' ? 'on-chain simulation' : 'API preflight'}
+          {skipPreflight ? (
+            <div className="rounded-btn border border-warn/20 bg-warn/5 p-3">
+              <div className="flex items-center gap-2 text-xs text-warn">
+                <AlertTriangle size={12} />
+                Preflight checks disabled in Settings — submitting without dry-run.
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={runPreflight}
-                disabled={preflight.kind === 'running'}
-                className="h-7 px-2 text-[11px]"
-              >
-                <RefreshCw
-                  size={11}
-                  className={cn(preflight.kind === 'running' && 'animate-spin')}
-                />
-                Re-run
-              </Button>
             </div>
-
-            {preflight.kind === 'idle' && (
-              <div className="text-xs text-fg-muted">Queued…</div>
-            )}
-            {preflight.kind === 'running' && (
-              <div className="flex items-center gap-2 text-xs text-fg-muted">
-                <Loader2 size={12} className="animate-spin" />
-                Running checks — no real transaction is sent.
+          ) : (
+            <div className="rounded-btn border border-white/[0.08] bg-white/[0.02] p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="text-[10px] uppercase tracking-widest text-fg-muted inline-flex items-center gap-1.5">
+                  <Play size={10} />
+                  Dry run — {source.kind === 'evm' ? 'on-chain simulation' : 'API preflight'}
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={runPreflight}
+                  disabled={preflight.kind === 'running'}
+                  className="h-7 px-2 text-[11px]"
+                >
+                  <RefreshCw
+                    size={11}
+                    className={cn(preflight.kind === 'running' && 'animate-spin')}
+                  />
+                  Re-run
+                </Button>
               </div>
-            )}
-            {preflight.kind === 'done' && (
-              <PreflightPanel result={preflight.result} />
-            )}
-          </div>
+
+              {preflight.kind === 'idle' && (
+                <div className="text-xs text-fg-muted">Queued…</div>
+              )}
+              {preflight.kind === 'running' && (
+                <div className="flex items-center gap-2 text-xs text-fg-muted">
+                  <Loader2 size={12} className="animate-spin" />
+                  Running checks — no real transaction is sent.
+                </div>
+              )}
+              {preflight.kind === 'done' && (
+                <PreflightPanel result={preflight.result} />
+              )}
+            </div>
+          )}
 
           {/* Ack */}
           <label className="flex items-start gap-2 cursor-pointer select-none">

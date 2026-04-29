@@ -71,7 +71,12 @@ const api: Api = {
     add: (input) => ipcRenderer.invoke('wallets:add', input),
     remove: (id) => ipcRenderer.invoke('wallets:remove', id),
     getBalances: (address) =>
-      ipcRenderer.invoke('wallets:getBalances', address)
+      ipcRenderer.invoke('wallets:getBalances', address),
+    getSolBalances: (address) =>
+      ipcRenderer.invoke('wallets:getSolBalances', address)
+  },
+  solana: {
+    send: (input) => ipcRenderer.invoke('solana:send', input)
   },
   prefs: {
     get: () => ipcRenderer.invoke('prefs:get'),

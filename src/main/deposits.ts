@@ -16,7 +16,7 @@ import type { Exchange } from 'ccxt'
 const FILE = 'deposits.json'
 const POLL_INTERVAL_MS = 30_000
 const LOOKBACK_MS = 48 * 60 * 60 * 1000 // 48h
-const MAX_RECORDS = 500
+const MAX_RECORDS = 1000
 
 let records: DepositRecord[] = []
 let loaded = false

@@ -11,6 +11,7 @@ export default function App() {
   const [vaultState, setVaultState] = useState<VaultState>('locked')
   const [view, setView] = useState<View>('dashboard')
   const [loaded, setLoaded] = useState(false)
+  const [hideBalances, setHideBalances] = useState(false)
 
   useEffect(() => {
     window.api.vault.state().then((s) => {
@@ -62,7 +63,7 @@ export default function App() {
         />
       ) : (
         <div className="flex-1 min-h-0 flex flex-col">
-          <DashboardPage />
+          <DashboardPage hideBalances={hideBalances} onToggleHide={() => setHideBalances((v) => !v)} />
         </div>
       )}
     </div>

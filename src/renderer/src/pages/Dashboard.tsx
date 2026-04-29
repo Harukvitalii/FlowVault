@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, RefreshCw, Wallet } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, RefreshCw, Wallet } from 'lucide-react'
 import { EXCHANGE_META, type Source } from '../data/sources'
 import { SourceCard } from '../components/SourceCard'
 import { RpcTicker } from '../components/RpcTicker'
@@ -29,7 +29,12 @@ function formatAgo(ts: number | null, now: number): string | null {
   return `${h}h ago`
 }
 
-export function DashboardPage() {
+type DashboardProps = {
+  hideBalances: boolean
+  onToggleHide: () => void
+}
+
+export function DashboardPage({ hideBalances, onToggleHide }: DashboardProps) {
   const [sources, setSources] = useState<Source[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loadingMeta, setLoadingMeta] = useState(true)
@@ -61,7 +66,7 @@ export function DashboardPage() {
         id: w.id,
         name: w.label,
         short: w.network ? w.network.toUpperCase() : 'EVM',
-        accent: '#627EEA',
+        accent: w.network === 'SOL' ? '#9945FF' : '#627EEA',
         address: w.address,
         network: w.network,
         canSend: w.canSend,
@@ -79,9 +84,11 @@ export function DashboardPage() {
         const r =
           src.kind === 'cex'
             ? await window.api.exchanges.getBalances(src.id)
-            : src.address
-              ? await window.api.wallets.getBalances(src.address)
-              : { ok: true, balances: [] }
+            : src.network === 'SOL' && src.address
+              ? await window.api.wallets.getSolBalances(src.address)
+              : src.address
+                ? await window.api.wallets.getBalances(src.address)
+                : { ok: true, balances: [] }
         setSources((prev) =>
           prev.map((s) =>
             s.id === src.id
@@ -161,12 +168,11 @@ export function DashboardPage() {
                       <>
                         <span className="text-white/[0.15]">·</span>
                         <span className="font-mono font-tnum">
-                          $
-                          {selected.balances
+                          {hideBalances ? '$••••' : `$${selected.balances
                             .reduce((s, b) => s + b.usd, 0)
                             .toLocaleString('en-US', {
                               maximumFractionDigits: 2
-                            })}
+                            })}`}
                         </span>
                       </>
                     )}
@@ -240,6 +246,13 @@ export function DashboardPage() {
                         {refreshing ? 'refreshing…' : `updated ${ago}`}
                       </span>
                     )}
+                    <button
+                      onClick={onToggleHide}
+                      className="w-8 h-8 rounded-btn flex items-center justify-center text-fg-muted hover:text-fg hover:bg-white/[0.04] transition-colors"
+                      title={hideBalances ? 'Show balances' : 'Hide balances'}
+                    >
+                      {hideBalances ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
                     <Button
                       variant="ghost"
                       onClick={refresh}
@@ -270,6 +283,7 @@ export function DashboardPage() {
                       source={s}
                       selected={false}
                       onSelect={isSource ? () => setSelectedId(s.id) : undefined}
+                      hideBalances={hideBalances}
                     />
                   )
                 })}

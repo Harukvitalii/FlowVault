@@ -30,6 +30,8 @@
     "vite": "^5.4.11"
   },
   "dependencies": {
+    "@solana/spl-token": "^0.4.14",
+    "@solana/web3.js": "^1.98.4",
     "ccxt": "^4.5.50",
     "clsx": "^2.1.1",
     "lucide-react": "^0.460.0",

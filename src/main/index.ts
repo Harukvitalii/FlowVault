@@ -50,6 +50,7 @@ import {
 import { checkEvmStatus, preflightEvmSend, submitEvmSend } from './evm-send'
 import { loadFromDisk, wipeDiskCache } from './cache-store'
 import { getEvmWalletBalances } from './evm'
+import { getSolanaBalances, sendSolanaTransfer } from './solana'
 import {
   clear as clearWithdrawals,
   list as listWithdrawals,
@@ -324,6 +325,18 @@ app.whenReady().then(async () => {
   ipcMain.handle('wallets:getBalances', (_e, address: unknown) =>
     getEvmWalletBalances(str(address), listRpcs())
   )
+  ipcMain.handle('wallets:getSolBalances', (_e, address: unknown) =>
+    getSolanaBalances(str(address))
+  )
+  ipcMain.handle('solana:send', (_e, input: unknown) => {
+    const o = obj(input)
+    return sendSolanaTransfer({
+      secretKey: str(o.secretKey),
+      toAddress: str(o.toAddress),
+      coin: str(o.coin),
+      amount: num(o.amount)
+    })
+  })
 
   // Prefs
   ipcMain.handle('prefs:get', () => getPrefs())

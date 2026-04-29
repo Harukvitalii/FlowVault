@@ -23,7 +23,7 @@ import {
   WITHDRAW_TYPE as SHARED_WITHDRAW_TYPE,
   transferTypeLabel
 } from '@shared/exchanges'
-import { isValidAddress } from '@shared/addresses'
+import { isValidAddress, addressFormatHint, networkClassOf } from '@shared/addresses'
 import { etaMinutes, formatEta } from '@shared/eta'
 import { ConfirmWithdrawModal } from './ConfirmWithdrawModal'
 import type { Source } from '../data/sources'
@@ -337,8 +337,11 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
   // ---------------- Deposit address(es) ----------------
   const [addr, setAddr] = useState<AddressState>({ status: 'idle' })
   const [selectedAddr, setSelectedAddr] = useState<string>('')
+  // Use depositNet directly so switching networks clears immediately.
+  const depositNetworkCode = depositInfo?.network ?? ''
   useEffect(() => {
     let cancelled = false
+    // Clear immediately on any change — never show stale address from another network.
     setAddr({ status: 'idle' })
     setSelectedAddr('')
     if (!dest) return
@@ -349,18 +352,28 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
       }
       return
     }
-    if (!depositInfo) return
+    if (!depositNetworkCode) return
     const timer = setTimeout(() => {
       if (!cancelled) setAddr({ status: 'loading' })
     }, 80)
     window.api.exchanges
-      .getDepositAddresses(dest.id, coin, depositInfo.network)
+      .getDepositAddresses(dest.id, coin, depositNetworkCode)
       .then((r) => {
         clearTimeout(timer)
         if (cancelled) return
         if (r.ok && r.addresses && r.addresses.length > 0) {
-          setAddr({ status: 'ok', addresses: r.addresses })
-          setSelectedAddr(r.addresses[0]!.address)
+          // Validate addresses match the expected network before showing
+          const family = networkFamily(depositNetworkCode)
+          const validated = r.addresses.filter(
+            (a) => !family || isValidAddress(family, a.address) || networkClassOf(family) === 'other'
+          )
+          if (validated.length > 0) {
+            setAddr({ status: 'ok', addresses: validated })
+            setSelectedAddr(validated[0]!.address)
+          } else {
+            // Exchange returned address that doesn't match the network format
+            setAddr({ status: 'error', message: 'address format mismatch — try refreshing' })
+          }
         } else {
           setAddr({ status: 'error', message: r.error ?? 'failed' })
         }
@@ -369,7 +382,7 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [dest, depositInfo, coin])
+  }, [dest?.id, dest?.kind, dest?.address, depositNetworkCode, coin])
 
   const selectedAddrEntry =
     addr.status === 'ok'
@@ -414,7 +427,9 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
   const [confirmOpen, setConfirmOpen] = useState(false)
 
   // Address format sanity check on the selected entry.
-  const addressFamily = destFamily || sourceFamily
+  // For watch-only wallets with a known network, use that network's family.
+  const destWalletFamily = dest?.network ? networkFamily(dest.network) : ''
+  const addressFamily = destWalletFamily || destFamily || sourceFamily
   const addressOk =
     selectedAddrEntry && addressFamily
       ? isValidAddress(addressFamily, selectedAddrEntry.address)
@@ -858,63 +873,79 @@ function AddressRow({
   }
 
   const Wrapper: React.ElementType = selectable ? 'button' : 'div'
+  const hint = family ? addressFormatHint(family) : null
 
   return (
-    <Wrapper
-      type={selectable ? 'button' : undefined}
-      onClick={selectable ? onSelect : undefined}
-      className={cn(
-        'w-full flex items-center gap-2 rounded-btn px-3 h-11 text-left',
-        'border transition-colors',
-        selected
-          ? 'bg-accent/[0.06] border-accent/40'
-          : 'bg-white/[0.03] border-white/[0.08]',
-        selectable && !selected && 'hover:bg-white/[0.06] cursor-pointer'
-      )}
-    >
-      {selectable && (
-        <span
-          className={cn(
-            'w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0',
-            selected
-              ? 'border-accent bg-accent/30'
-              : 'border-white/[0.2] bg-transparent'
-          )}
-        >
-          {selected && <span className="w-1.5 h-1.5 rounded-full bg-accent" />}
-        </span>
-      )}
-      {valid === true && !selectable && (
-        <Check size={13} className="text-accent shrink-0" />
-      )}
-      {valid === false && (
-        <AlertTriangle size={13} className="text-danger shrink-0" />
-      )}
-      <span className="flex-1 font-mono text-xs text-fg truncate">
-        {entry.address}
-      </span>
-      {entry.label && (
-        <span className="text-[10px] uppercase tracking-wider text-fg-muted border border-white/[0.08] rounded px-1.5 py-0.5 shrink-0">
-          {entry.label}
-        </span>
-      )}
-      {entry.tag && (
-        <span className="text-[10px] font-mono text-fg-muted shrink-0">
-          tag: <span className="text-fg">{entry.tag}</span>
-        </span>
-      )}
-      <button
-        type="button"
-        onClick={copy}
-        className="text-fg-muted hover:text-fg transition-colors shrink-0"
-        title={copied ? 'Copied' : 'Copy'}
+    <div className="space-y-1">
+      <Wrapper
+        type={selectable ? 'button' : undefined}
+        onClick={selectable ? onSelect : undefined}
+        className={cn(
+          'w-full flex items-center gap-2 rounded-btn px-3 h-11 text-left',
+          'border transition-colors',
+          valid === false
+            ? 'bg-danger/[0.04] border-danger/30'
+            : selected
+              ? 'bg-accent/[0.06] border-accent/40'
+              : 'bg-white/[0.03] border-white/[0.08]',
+          selectable && !selected && 'hover:bg-white/[0.06] cursor-pointer'
+        )}
       >
-        <Copy size={13} />
-      </button>
-      {copied && (
-        <span className="text-[10px] text-accent shrink-0">copied</span>
+        {selectable && (
+          <span
+            className={cn(
+              'w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0',
+              selected
+                ? 'border-accent bg-accent/30'
+                : 'border-white/[0.2] bg-transparent'
+            )}
+          >
+            {selected && <span className="w-1.5 h-1.5 rounded-full bg-accent" />}
+          </span>
+        )}
+        {valid === true && !selectable && (
+          <Check size={13} className="text-accent shrink-0" />
+        )}
+        {valid === false && (
+          <AlertTriangle size={13} className="text-danger shrink-0" />
+        )}
+        <span className="flex-1 font-mono text-xs text-fg truncate">
+          {entry.address}
+        </span>
+        {entry.label && (
+          <span className="text-[10px] uppercase tracking-wider text-fg-muted border border-white/[0.08] rounded px-1.5 py-0.5 shrink-0">
+            {entry.label}
+          </span>
+        )}
+        {entry.tag && (
+          <span className="text-[10px] font-mono text-fg-muted shrink-0">
+            tag: <span className="text-fg">{entry.tag}</span>
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={copy}
+          className="text-fg-muted hover:text-fg transition-colors shrink-0"
+          title={copied ? 'Copied' : 'Copy'}
+        >
+          <Copy size={13} />
+        </button>
+        {copied && (
+          <span className="text-[10px] text-accent shrink-0">copied</span>
+        )}
+      </Wrapper>
+      {valid === false && hint && (
+        <div className="text-[10px] text-danger pl-3 flex items-center gap-1.5">
+          <AlertTriangle size={10} />
+          Address doesn't match expected format: {hint}
+        </div>
       )}
-    </Wrapper>
+      {valid === true && hint && !selectable && (
+        <div className="text-[10px] text-fg-muted/60 pl-3">
+          {hint}
+        </div>
+      )}
+    </div>
   )
 }
 

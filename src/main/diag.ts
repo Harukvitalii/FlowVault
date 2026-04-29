@@ -50,8 +50,7 @@ async function doProbe(opts: ProbeOpts): Promise<ConnectionTestStep> {
     return {
       name: 'signed',
       status: 'ok',
-      latencyMs,
-      detail: stripNonPrintable(text.slice(0, 140))
+      latencyMs
     }
   } catch (err) {
     const latencyMs = Date.now() - started
@@ -156,8 +155,7 @@ async function ccxtSignedProbe(creds: Creds): Promise<ConnectionTestStep> {
     return {
       name: 'signed',
       status: 'ok',
-      latencyMs: Date.now() - started,
-      detail: 'ccxt signed call ok'
+      latencyMs: Date.now() - started
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'failed'

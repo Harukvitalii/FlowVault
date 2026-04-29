@@ -5,8 +5,9 @@ import { WalletsTab } from '../components/WalletsTab'
 import { RpcsTab } from '../components/RpcsTab'
 import { SecurityTab } from '../components/SecurityTab'
 import { SetupTab } from '../components/SetupTab'
+import { StatisticsTab } from '../components/StatisticsTab'
 
-type Tab = 'exchanges' | 'wallets' | 'rpcs' | 'setup' | 'security'
+type Tab = 'exchanges' | 'wallets' | 'rpcs' | 'setup' | 'security' | 'statistics'
 
 type Props = {
   onWiped: () => void
@@ -35,6 +36,12 @@ export function SettingsPage({ onWiped }: Props) {
             RPCs
           </TabBtn>
           <TabBtn
+            active={tab === 'statistics'}
+            onClick={() => setTab('statistics')}
+          >
+            Statistics
+          </TabBtn>
+          <TabBtn
             active={tab === 'security'}
             onClick={() => setTab('security')}
           >
@@ -46,6 +53,7 @@ export function SettingsPage({ onWiped }: Props) {
         {tab === 'wallets' && <WalletsTab />}
         {tab === 'rpcs' && <RpcsTab />}
         {tab === 'setup' && <SetupTab />}
+        {tab === 'statistics' && <StatisticsTab />}
         {tab === 'security' && <SecurityTab onWiped={onWiped} />}
       </div>
     </div>

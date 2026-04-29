@@ -62,6 +62,8 @@ export interface UserPrefs {
   whitelistSelection: CoinNetworkPair[]
   /** When false, deposit monitoring is disabled. Default true. */
   depositsEnabled?: boolean
+  /** When true, skip the preflight dry-run before submitting withdrawals. */
+  skipPreflight?: boolean
 }
 
 export type DepositStatus = 'pending' | 'processing' | 'ok'
@@ -369,6 +371,17 @@ export interface Api {
     getBalances: (
       address: string
     ) => Promise<{ ok: boolean; balances?: Balance[]; error?: string }>
+    getSolBalances: (
+      address: string
+    ) => Promise<{ ok: boolean; balances?: Balance[]; error?: string }>
+  }
+  solana: {
+    send: (input: {
+      secretKey: string
+      toAddress: string
+      coin: string
+      amount: number
+    }) => Promise<{ ok: boolean; txHash?: string; error?: string }>
   }
   rpc: {
     list: () => Promise<RpcEntry[]>

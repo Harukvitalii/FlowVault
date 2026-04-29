@@ -8,13 +8,14 @@ type Props = {
   selected: boolean
   /** Undefined = not clickable (watch-only wallet). */
   onSelect?: () => void
+  hideBalances?: boolean
 }
 
 function shortAddr(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }
 
-export function SourceCard({ source, selected, onSelect }: Props) {
+export function SourceCard({ source, selected, onSelect, hideBalances }: Props) {
   const totalUsd =
     source.balances?.reduce((acc, b) => acc + b.usd, 0) ?? null
   const watchOnly = source.canSend === false
@@ -68,6 +69,8 @@ export function SourceCard({ source, selected, onSelect }: Props) {
             <Loader2 size={12} className="animate-spin" />
             loading
           </div>
+        ) : hideBalances ? (
+          <div className="font-mono font-tnum text-lg text-fg">$••••</div>
         ) : (
           <div className="font-mono font-tnum text-lg text-fg">
             $
@@ -85,6 +88,16 @@ export function SourceCard({ source, selected, onSelect }: Props) {
           </span>
         ) : source.balances === null ? (
           <span className="text-fg-muted/50">Fetching balances…</span>
+        ) : hideBalances ? (
+          source.balances.slice(0, 3).map((b, i) => (
+            <div
+              key={`${b.asset}-${b.chain ?? b.accountType ?? 'cex'}-${i}`}
+              className="flex justify-between items-center"
+            >
+              <span>{b.asset}</span>
+              <span className="text-fg/80">••••</span>
+            </div>
+          ))
         ) : source.kind === 'evm' && source.balances.length === 0 ? (
           <span className="text-fg-muted/70 truncate">
             {source.address ? shortAddr(source.address) : '—'}

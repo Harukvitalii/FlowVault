@@ -59,9 +59,11 @@ function sanitize(raw: unknown): UserPrefs {
     }
   }
   const depositsEnabled = (raw as { depositsEnabled?: unknown }).depositsEnabled
+  const skipPreflight = (raw as { skipPreflight?: unknown }).skipPreflight
   return {
     whitelistSelection: unique,
-    depositsEnabled: depositsEnabled === false ? false : undefined
+    depositsEnabled: depositsEnabled === false ? false : undefined,
+    skipPreflight: skipPreflight === true ? true : undefined
   }
 }
 
