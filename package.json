@@ -10,12 +10,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Harukvitalii/withdraw_app.git"
+    "url": "https://github.com/Harukvitalii/FlowVault.git"
   },
   "bugs": {
-    "url": "https://github.com/Harukvitalii/withdraw_app/issues"
+    "url": "https://github.com/Harukvitalii/FlowVault/issues"
   },
-  "homepage": "https://github.com/Harukvitalii/withdraw_app#readme",
+  "homepage": "https://github.com/Harukvitalii/FlowVault#readme",
   "main": "out/main/index.mjs",
   "scripts": {
     "dev": "electron-vite dev",
