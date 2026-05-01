@@ -35,16 +35,29 @@
 
 ---
 
+## Quick Start
+
+From zero to your first transfer in 5 minutes:
+
+1. **Download** the right file for your OS from the [Releases page](https://github.com/Harukvitalii/FlowVault/releases/latest) and open it. Detailed per-OS install steps are below in the [Install](#install) section.
+2. **Set a master password** the first time the app launches. This password encrypts every API key and wallet you add — **there is no recovery if you forget it.** Use a password manager.
+3. **Add an exchange.** On the exchange's website, create an API key with **Read** + **Withdraw** permissions, copy the key + secret (+ passphrase for OKX / KuCoin / Bitget) into FlowVault's Settings → Exchanges.
+4. **Whitelist destinations on the exchange's website.** Add the deposit address of every other exchange / wallet you want to send to. Most exchanges enforce a 24h cooldown after adding a new address.
+5. **Make your first transfer.** Open the source on the dashboard, pick the destination, FlowVault picks the cheapest network for you (the **BEST** badge), enter the amount, click **Review & withdraw**.
+
+---
+
 ## What it does
 
 FlowVault consolidates multi-exchange crypto management into one interface:
 
-- **Withdraw from any CEX** to any other CEX or EVM wallet in a few clicks
-- **On-chain EVM transfers** directly from your wallet (sign & broadcast)
-- **Deposit monitoring** with live status tracking across all connected exchanges
-- **Smart network matching** automatically picks the cheapest compatible chain
-- **Internal transfers** between exchange sub-accounts (spot, futures, funding)
-- **Activity feed** with real-time withdrawal and deposit tracking
+- **Exchange-to-exchange transfers in as little as 10 seconds** — pick source, pick destination, click. The app builds the request, the exchange signs it, the deposit is credited the moment it lands.
+- **Withdraw from any CEX** to any other CEX or EVM wallet in a few clicks.
+- **On-chain EVM transfers** directly from your wallet (sign & broadcast).
+- **Deposit monitoring** with live status tracking across all connected exchanges.
+- **Smart network matching** automatically picks the cheapest compatible chain.
+- **Internal transfers** between exchange sub-accounts (spot, futures, funding).
+- **Activity feed** with real-time withdrawal and deposit tracking.
 
 ## Supported Exchanges & Wallets
 
@@ -67,19 +80,95 @@ FlowVault consolidates multi-exchange crypto management into one interface:
 
 ## Security
 
+In plain words:
+
+- **Your keys live only on this computer.** They never touch any remote server, ever. If you uninstall the app and wipe its data folder, the keys are gone forever.
+- **They are encrypted with the same algorithm banks use** (AES-256). Without your master password, the vault file is unreadable — even by you, even by us.
+- **The app makes no telemetry calls.** The only outgoing requests are the ones you see in the Activity feed (exchange APIs and the EVM / Solana RPCs you configured), plus a single call to `api.ipify.org` to show your public IP on the Setup tab.
+- **No auto-update, no analytics, no error reporting.** What runs on your computer is exactly the version you downloaded.
+
+<details>
+<summary><b>Technical details</b> (for developers / auditors)</summary>
+
 | Feature | Detail |
 |---------|--------|
 | **Vault encryption** | AES-256-GCM with scrypt key derivation (N=2^17, r=8) |
-| **Master key** | Minimum 8 characters, exponential backoff on failed attempts |
+| **Master key** | Minimum 8 characters, exponential backoff on failed attempts (persisted across restarts) |
 | **Electron sandbox** | Renderer process runs with `sandbox: true` |
-| **Context isolation** | `contextIsolation: true`, `nodeIntegration: false` |
+| **Context isolation** | `contextIsolation: true`, `nodeIntegration: false`, `webSecurity: true` |
 | **CSP** | Strict Content-Security-Policy, no wildcard `connect-src` |
 | **Navigation blocked** | `will-navigate` prevented, `shell.openExternal` validates `https://` only |
-| **IPC validation** | All renderer→main IPC arguments validated at runtime |
+| **IPC validation** | All renderer→main IPC arguments validated at runtime; errors carry no stack |
 | **Atomic writes** | Vault and history files use tmp+rename to prevent corruption |
 | **File permissions** | Vault, history, and cache files written with `mode 0o600` (owner-only) on POSIX |
 | **Permissions denied** | Renderer denied mic, camera, geolocation, notifications, and all browser permission prompts |
-| **No telemetry** | No analytics, no tracking, no auto-update calls. Outgoing requests are limited to those you initiate (CEX API, EVM/Solana RPC) plus Google Fonts and `api.ipify.org` for public-IP detection on the Setup tab. |
+| **DevTools** | Disabled in production builds — `devtools-opened` listener auto-closes the inspector |
+| **SSRF guard** | RPC URLs reject loopback / RFC-1918 / link-local / IPv6 ULA addresses |
+| **Idempotency** | Each Review modal generates a UUID; main-process dedupes duplicate submits within a 5-min TTL |
+
+</details>
+
+## FAQ
+
+<details>
+<summary><b>Is my money safe if my laptop breaks or gets stolen?</b></summary>
+
+Your **vault file** is what holds the keys. Back it up to an encrypted location (a password-manager attachment, an encrypted USB stick) and you can restore on a new machine. Without that backup the keys are gone — but **your funds are not**. The funds live on the exchange / on-chain; you can always re-add the API keys / re-import the wallet from your originals.
+
+Vault file location:
+- macOS: `~/Library/Application Support/flowvault/vault.enc`
+- Windows: `%APPDATA%\flowvault\vault.enc`
+- Linux: `~/.config/flowvault/vault.enc`
+</details>
+
+<details>
+<summary><b>What if I forget my master password?</b></summary>
+
+There is no recovery — by design. The master password is what encrypts the vault; if it could be reset, the encryption would be meaningless. **Use a password manager.** If lost, your only option is to wipe the vault from Settings → Security and start over (re-add API keys + wallets).
+</details>
+
+<details>
+<summary><b>Why does macOS say the app is "damaged" or won't open?</b></summary>
+
+Beta builds are not code-signed. macOS quarantines them on first run. See [macOS install steps](#macos) — usually one terminal command (`xattr -dr com.apple.quarantine ...`) clears it.
+</details>
+
+<details>
+<summary><b>Does FlowVault take any fee?</b></summary>
+
+**No.** The app is free and takes nothing on top. You pay only:
+- The exchange's withdrawal fee (visible on every network chip).
+- The on-chain gas fee (when sending from your own EVM / SOL wallet).
+</details>
+
+<details>
+<summary><b>Can it trade for me / make money on its own?</b></summary>
+
+**No.** Every transfer is a manual click. There is no auto-trader, no scheduling, no DCA, no signal following. The app only moves funds you explicitly tell it to move.
+</details>
+
+<details>
+<summary><b>Why does the destination dropdown / Review button not work for some addresses?</b></summary>
+
+The exchange enforces an address whitelist on its API. If the destination's deposit address is not in your withdraw whitelist on the **source** exchange, the API call will fail. Add the address on the exchange's website and wait 24h on most CEX (Bybit / Binance / KuCoin / etc) before retrying.
+</details>
+
+<details>
+<summary><b>What if a withdrawal gets stuck on "processing"?</b></summary>
+
+FlowVault polls the exchange's status every few seconds for up to 24 hours. Common reasons it stays "processing":
+- The exchange is still confirming the on-chain transaction (5–60 min depending on chain).
+- The destination CEX is awaiting its own internal confirmations (usually 12+ on EVM L1, fewer on L2).
+- The exchange is doing AML / compliance review (rare; can take hours).
+
+You can verify on-chain via the explorer link in the activity row. If the chain shows confirmed but the destination CEX hasn't credited after >2h, contact the destination exchange.
+</details>
+
+<details>
+<summary><b>Why isn't [my exchange] supported?</b></summary>
+
+The 9 listed CEX are the ones with stable API support via [ccxt](https://github.com/ccxt/ccxt) / direct REST clients. Open an issue on GitHub if you need another. Keep in mind: only exchanges with a documented withdrawal API can be added.
+</details>
 
 ## Install
 
@@ -122,7 +211,18 @@ The portable build keeps everything in the `.exe` and does not modify the regist
 | Debian / Ubuntu | `flowvault_x.y.z_amd64.deb` | `sudo dpkg -i flowvault_*.deb` |
 | Tarball | `flowvault-x.y.z.tar.gz` | `tar -xzf flowvault-*.tar.gz && ./flowvault/flowvault` |
 
-## Getting Started
+## First Launch
+
+1. **Create a master key** — encrypts all stored credentials.
+2. **Add exchanges** — paste API key + secret (+ passphrase for OKX / KuCoin / Bitget).
+3. **Whitelist your IP** — Setup tab shows your public IP and per-exchange instructions.
+4. **Add wallets** — import EVM private key (for sending) or add watch-only addresses.
+5. **Configure RPCs** — default RPCs are pre-loaded; add custom ones for better latency.
+
+---
+
+<details>
+<summary><b>For developers — build from source</b></summary>
 
 ### Prerequisites
 
@@ -138,35 +238,31 @@ npm install
 # Development mode (hot reload)
 npm run dev
 
-# Production build
+# Production build (validates types + builds main / preload / renderer)
 npm run build
 ```
 
-### First Launch
-
-1. **Create a master key** — encrypts all stored credentials
-2. **Add exchanges** — paste API key + secret (+ passphrase for OKX/KuCoin/Bitget)
-3. **Whitelist your IP** — Setup tab shows your public IP and per-exchange instructions
-4. **Add wallets** — import EVM private key (for sending) or add watch-only addresses
-5. **Configure RPCs** — default RPCs are pre-loaded; add custom ones for better latency
-
-## Tech Stack
+### Tech Stack
 
 - **[Electron](https://www.electronjs.org/)** + **[electron-vite](https://electron-vite.org/)** — desktop shell
 - **[React](https://react.dev/)** + **[TypeScript](https://www.typescriptlang.org/)** — UI
 - **[Tailwind CSS](https://tailwindcss.com/)** — styling
 - **[ccxt](https://github.com/ccxt/ccxt)** — unified exchange API (8 exchanges)
 - **[viem](https://viem.sh/)** — EVM transactions and contract calls
+- **[@solana/web3.js](https://solana-labs.github.io/solana-web3.js/)** + **[bs58](https://github.com/cryptocoinjs/bs58)** + **[@noble/hashes](https://github.com/paulmillr/noble-hashes)** — Solana send + base58check address validation
 - **Custom REST clients** — Phemex (HMAC SHA256 signing)
 
-## Data Storage
+### Data Storage
 
 All data stays on your machine in the Electron `userData` directory:
 
 | File | Content | Encrypted |
 |------|---------|:---------:|
 | `vault.enc` | API keys, secrets, private keys, RPC configs | :white_check_mark: |
+| `vault.lockout.json` | Brute-force backoff counter | :x: |
 | `withdrawals.json` | Withdrawal history and status | :x: |
 | `deposits.json` | Deposit history | :x: |
 | `exchange-cache.json` | Network info + deposit address cache (TTL-based) | :x: |
 | `prefs.json` | User preferences | :x: |
+
+</details>
