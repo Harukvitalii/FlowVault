@@ -99,6 +99,47 @@ src/
 └── shared/                # Types, network mappings, address validation
 ```
 
+## Install
+
+Download the latest pre-built binary from the [Releases page](https://github.com/Harukvitalii/FlowVault/releases/latest).
+
+> ⚠️ **Beta builds are not code-signed.** macOS Gatekeeper, Windows SmartScreen, and Linux launchers will show a warning the first time. Follow the steps below to bypass.
+
+### macOS
+
+| Chip | File |
+|------|------|
+| Apple Silicon (M1/M2/M3/M4) | `FlowVault-x.y.z-arm64.dmg` |
+| Intel | `FlowVault-x.y.z.dmg` |
+
+1. Open the `.dmg` and drag **FlowVault** into Applications.
+2. Launch FlowVault. macOS blocks it with *"FlowVault cannot be opened because the developer cannot be verified"* — click **Cancel**.
+3. Open **System Settings → Privacy & Security**, scroll to the bottom, click **Open Anyway** next to the FlowVault notice.
+4. Confirm with **Open**. The app launches and remembers the exception.
+
+If *Open Anyway* is missing or the dialog says the app is "damaged", clear the quarantine attribute:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/FlowVault.app
+```
+
+### Windows
+
+Download `FlowVault-x.y.z.exe` (portable — no installer required) and double-click.
+
+1. Windows SmartScreen shows *"Windows protected your PC"*.
+2. Click **More info → Run anyway**.
+
+The portable build keeps everything in the `.exe` and does not modify the registry.
+
+### Linux
+
+| Format | File | Run |
+|--------|------|-----|
+| AppImage | `FlowVault-x.y.z.AppImage` | `chmod +x FlowVault-*.AppImage && ./FlowVault-*.AppImage` |
+| Debian / Ubuntu | `flowvault_x.y.z_amd64.deb` | `sudo dpkg -i flowvault_*.deb` |
+| Tarball | `flowvault-x.y.z.tar.gz` | `tar -xzf flowvault-*.tar.gz && ./flowvault/flowvault` |
+
 ## Getting Started
 
 ### Prerequisites
