@@ -37,13 +37,17 @@
 
 ## Quick Start
 
-From zero to your first transfer in 5 minutes:
+From zero to your first transfer:
 
 1. **Download** the right file for your OS from the [Releases page](https://github.com/Harukvitalii/FlowVault/releases/latest) and open it. Detailed per-OS install steps are below in the [Install](#install) section.
 2. **Set a master password** the first time the app launches. This password encrypts every API key and wallet you add — **there is no recovery if you forget it.** Use a password manager.
-3. **Add an exchange.** On the exchange's website, create an API key with **Read** + **Withdraw** permissions, copy the key + secret (+ passphrase for OKX / KuCoin / Bitget) into FlowVault's Settings → Exchanges.
-4. **Whitelist destinations on the exchange's website.** Add the deposit address of every other exchange / wallet you want to send to. Most exchanges enforce a 24h cooldown after adding a new address.
-5. **Make your first transfer.** Open the source on the dashboard, pick the destination, FlowVault picks the cheapest network for you (the **BEST** badge), enter the amount, click **Review & withdraw**.
+3. **Whitelist your public IP on each exchange.** Open Settings → Setup — FlowVault shows your IP and links to the right page on each exchange. Most CEX block API keys that aren't tied to a fixed IP.
+4. **Add exchange API keys.** On the exchange's website create a key with **Read** + **Withdraw** permissions; paste key + secret (+ passphrase for OKX / KuCoin / Bitget) into Settings → Exchanges.
+5. **(Optional) Add wallets.** Settings → Wallets — paste an EVM private key to enable on-chain sending, or add watch-only addresses for tracking. SOL wallets supported.
+6. **Whitelist destinations on each exchange's website.** Add the deposit address of every other exchange / wallet you want to send to. Most exchanges enforce a 24h cooldown after adding a new address.
+7. **Make your first transfer.** Open the source on the dashboard, pick the destination, FlowVault picks the cheapest network for you (the **BEST** badge), enter the amount, click **Review & withdraw**.
+
+> **Tip:** RPCs for EVM and Solana come pre-loaded. You can add custom RPCs (Settings → RPCs) for lower latency or stricter routing — but it's not required.
 
 ---
 
@@ -108,6 +112,95 @@ In plain words:
 
 </details>
 
+## Install
+
+Download the latest pre-built binary from the [Releases page](https://github.com/Harukvitalii/FlowVault/releases/latest).
+
+> ⚠️ **Beta builds are not code-signed.** macOS Gatekeeper, Windows SmartScreen, and Linux launchers will show a warning the first time. Follow the steps below to bypass.
+
+### macOS
+
+| Chip | File |
+|------|------|
+| Apple Silicon (M1/M2/M3/M4) | `FlowVault-x.y.z-arm64.dmg` |
+| Intel | `FlowVault-x.y.z.dmg` |
+
+1. Open the `.dmg` and drag **FlowVault** into Applications.
+2. Launch FlowVault. macOS blocks it with *"FlowVault cannot be opened because the developer cannot be verified"* — click **Cancel**.
+3. Open **System Settings → Privacy & Security**, scroll to the bottom, click **Open Anyway** next to the FlowVault notice.
+4. Confirm with **Open**. The app launches and remembers the exception.
+
+If *Open Anyway* is missing or the dialog says the app is "damaged", clear the quarantine attribute:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/FlowVault.app
+```
+
+### Windows
+
+Download `FlowVault-x.y.z.exe` (portable — no installer required) and double-click.
+
+1. Windows SmartScreen shows *"Windows protected your PC"*.
+2. Click **More info → Run anyway**.
+
+The portable build keeps everything in the `.exe` and does not modify the registry.
+
+### Linux
+
+| Format | File | Run |
+|--------|------|-----|
+| AppImage | `FlowVault-x.y.z.AppImage` | `chmod +x FlowVault-*.AppImage && ./FlowVault-*.AppImage` |
+| Debian / Ubuntu | `flowvault_x.y.z_amd64.deb` | `sudo dpkg -i flowvault_*.deb` |
+| Tarball | `flowvault-x.y.z.tar.gz` | `tar -xzf flowvault-*.tar.gz && ./flowvault/flowvault` |
+
+<details>
+<summary><b>For developers — build from source</b></summary>
+
+### Prerequisites
+
+- Node.js 20+
+- npm
+
+### Install & Run
+
+```bash
+# Install dependencies
+npm install
+
+# Development mode (hot reload)
+npm run dev
+
+# Production build (validates types + builds main / preload / renderer)
+npm run build
+```
+
+### Tech Stack
+
+- **[Electron](https://www.electronjs.org/)** + **[electron-vite](https://electron-vite.org/)** — desktop shell
+- **[React](https://react.dev/)** + **[TypeScript](https://www.typescriptlang.org/)** — UI
+- **[Tailwind CSS](https://tailwindcss.com/)** — styling
+- **[ccxt](https://github.com/ccxt/ccxt)** — unified exchange API (8 exchanges)
+- **[viem](https://viem.sh/)** — EVM transactions and contract calls
+- **[@solana/web3.js](https://solana-labs.github.io/solana-web3.js/)** + **[bs58](https://github.com/cryptocoinjs/bs58)** + **[@noble/hashes](https://github.com/paulmillr/noble-hashes)** — Solana send + base58check address validation
+- **Custom REST clients** — Phemex (HMAC SHA256 signing)
+
+### Data Storage
+
+All data stays on your machine in the Electron `userData` directory:
+
+| File | Content | Encrypted |
+|------|---------|:---------:|
+| `vault.enc` | API keys, secrets, private keys, RPC configs | :white_check_mark: |
+| `vault.lockout.json` | Brute-force backoff counter | :x: |
+| `withdrawals.json` | Withdrawal history and status | :x: |
+| `deposits.json` | Deposit history | :x: |
+| `exchange-cache.json` | Network info + deposit address cache (TTL-based) | :x: |
+| `prefs.json` | User preferences | :x: |
+
+</details>
+
+---
+
 ## FAQ
 
 <details>
@@ -168,101 +261,4 @@ You can verify on-chain via the explorer link in the activity row. If the chain 
 <summary><b>Why isn't [my exchange] supported?</b></summary>
 
 The 9 listed CEX are the ones with stable API support via [ccxt](https://github.com/ccxt/ccxt) / direct REST clients. Open an issue on GitHub if you need another. Keep in mind: only exchanges with a documented withdrawal API can be added.
-</details>
-
-## Install
-
-Download the latest pre-built binary from the [Releases page](https://github.com/Harukvitalii/FlowVault/releases/latest).
-
-> ⚠️ **Beta builds are not code-signed.** macOS Gatekeeper, Windows SmartScreen, and Linux launchers will show a warning the first time. Follow the steps below to bypass.
-
-### macOS
-
-| Chip | File |
-|------|------|
-| Apple Silicon (M1/M2/M3/M4) | `FlowVault-x.y.z-arm64.dmg` |
-| Intel | `FlowVault-x.y.z.dmg` |
-
-1. Open the `.dmg` and drag **FlowVault** into Applications.
-2. Launch FlowVault. macOS blocks it with *"FlowVault cannot be opened because the developer cannot be verified"* — click **Cancel**.
-3. Open **System Settings → Privacy & Security**, scroll to the bottom, click **Open Anyway** next to the FlowVault notice.
-4. Confirm with **Open**. The app launches and remembers the exception.
-
-If *Open Anyway* is missing or the dialog says the app is "damaged", clear the quarantine attribute:
-
-```bash
-xattr -dr com.apple.quarantine /Applications/FlowVault.app
-```
-
-### Windows
-
-Download `FlowVault-x.y.z.exe` (portable — no installer required) and double-click.
-
-1. Windows SmartScreen shows *"Windows protected your PC"*.
-2. Click **More info → Run anyway**.
-
-The portable build keeps everything in the `.exe` and does not modify the registry.
-
-### Linux
-
-| Format | File | Run |
-|--------|------|-----|
-| AppImage | `FlowVault-x.y.z.AppImage` | `chmod +x FlowVault-*.AppImage && ./FlowVault-*.AppImage` |
-| Debian / Ubuntu | `flowvault_x.y.z_amd64.deb` | `sudo dpkg -i flowvault_*.deb` |
-| Tarball | `flowvault-x.y.z.tar.gz` | `tar -xzf flowvault-*.tar.gz && ./flowvault/flowvault` |
-
-## First Launch
-
-1. **Create a master key** — encrypts all stored credentials.
-2. **Add exchanges** — paste API key + secret (+ passphrase for OKX / KuCoin / Bitget).
-3. **Whitelist your IP** — Setup tab shows your public IP and per-exchange instructions.
-4. **Add wallets** — import EVM private key (for sending) or add watch-only addresses.
-5. **Configure RPCs** — default RPCs are pre-loaded; add custom ones for better latency.
-
----
-
-<details>
-<summary><b>For developers — build from source</b></summary>
-
-### Prerequisites
-
-- Node.js 20+
-- npm
-
-### Install & Run
-
-```bash
-# Install dependencies
-npm install
-
-# Development mode (hot reload)
-npm run dev
-
-# Production build (validates types + builds main / preload / renderer)
-npm run build
-```
-
-### Tech Stack
-
-- **[Electron](https://www.electronjs.org/)** + **[electron-vite](https://electron-vite.org/)** — desktop shell
-- **[React](https://react.dev/)** + **[TypeScript](https://www.typescriptlang.org/)** — UI
-- **[Tailwind CSS](https://tailwindcss.com/)** — styling
-- **[ccxt](https://github.com/ccxt/ccxt)** — unified exchange API (8 exchanges)
-- **[viem](https://viem.sh/)** — EVM transactions and contract calls
-- **[@solana/web3.js](https://solana-labs.github.io/solana-web3.js/)** + **[bs58](https://github.com/cryptocoinjs/bs58)** + **[@noble/hashes](https://github.com/paulmillr/noble-hashes)** — Solana send + base58check address validation
-- **Custom REST clients** — Phemex (HMAC SHA256 signing)
-
-### Data Storage
-
-All data stays on your machine in the Electron `userData` directory:
-
-| File | Content | Encrypted |
-|------|---------|:---------:|
-| `vault.enc` | API keys, secrets, private keys, RPC configs | :white_check_mark: |
-| `vault.lockout.json` | Brute-force backoff counter | :x: |
-| `withdrawals.json` | Withdrawal history and status | :x: |
-| `deposits.json` | Deposit history | :x: |
-| `exchange-cache.json` | Network info + deposit address cache (TTL-based) | :x: |
-| `prefs.json` | User preferences | :x: |
-
 </details>
