@@ -262,3 +262,11 @@ You can verify on-chain via the explorer link in the activity row. If the chain 
 
 The 9 listed CEX are the ones with stable API support via [ccxt](https://github.com/ccxt/ccxt) / direct REST clients. Open an issue on GitHub if you need another. Keep in mind: only exchanges with a documented withdrawal API can be added.
 </details>
+
+---
+
+## Contact
+
+- **Telegram:** [@smartweb3dev](https://t.me/smartweb3dev)
+- **Email:** fewcoinsinmywallet@gmail.com
+- **Issues:** [github.com/Harukvitalii/FlowVault/issues](https://github.com/Harukvitalii/FlowVault/issues)
