@@ -295,7 +295,6 @@ export async function createWithdraw(
     chainName
   }
   if (addressTag) params.addressTag = addressTag
-  console.log(`[phemex] createWithdraw params:`, params)
 
   const data = await request<WithdrawResponse>(
     creds,

@@ -47,13 +47,17 @@
     "vite": "^5.4.11"
   },
   "dependencies": {
+    "@noble/hashes": "^2.2.0",
     "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.4",
+    "@types/react-window": "^1.8.8",
+    "bs58": "^6.0.0",
     "ccxt": "^4.5.50",
     "clsx": "^2.1.1",
     "lucide-react": "^0.460.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-window": "^2.2.7",
     "viem": "^2.48.4"
   }
 }

@@ -14,6 +14,7 @@ import { GlassCard } from './GlassCard'
 import { Button, Input, Row } from './ui'
 import { cn } from '../lib/cn'
 import { chainName as knownName } from '@shared/chains'
+import { sanitizeAddressInput } from '@shared/addresses'
 import type {
   ChainDetectResult,
   RpcEntry,
@@ -78,7 +79,7 @@ export function RpcsTab() {
   const saveEdit = async () => {
     if (!editingId) return
     const next = rpcs.map((r) =>
-      r.id === editingId ? { ...r, url: editUrl.trim() } : r
+      r.id === editingId ? { ...r, url: sanitizeAddressInput(editUrl) } : r
     )
     setEditingId(null)
     await commit(next)
@@ -269,7 +270,7 @@ function AddRpcForm({
   const lastDetectedUrl = useRef<string>('')
 
   const runDetect = async (rawUrl: string) => {
-    const u = rawUrl.trim()
+    const u = sanitizeAddressInput(rawUrl)
     if (!u || u === lastDetectedUrl.current) return
     lastDetectedUrl.current = u
     setDetect({ kind: 'detecting' })
@@ -304,7 +305,7 @@ function AddRpcForm({
       id: `custom-${crypto.randomUUID()}`,
       chainId: detected.chainId,
       chain: chainLabel.trim(),
-      url: url.trim(),
+      url: sanitizeAddressInput(url),
       custom: true
     }
     await onAdd(entry)

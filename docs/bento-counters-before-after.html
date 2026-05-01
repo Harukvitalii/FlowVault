@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>FlowVault — Bento + Counters · before / after</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --bg: #061512;
+    --fg: #F0FDF4;
+    --muted: #94A3B8;
+    --accent: #10B981;
+    --warn: #F59E0B;
+    --danger: #EF4444;
+  }
+  body { background: var(--bg); color: var(--fg); font-family: Inter, system-ui, sans-serif; }
+  .font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .font-tnum { font-variant-numeric: tabular-nums; }
+
+  /* ════════════════════════════════════════════════════════════════
+     BEFORE — current state (uniform grid, flat ambient, static nums)
+     ════════════════════════════════════════════════════════════════ */
+  .bg-before {
+    position: absolute; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(ellipse 60rem 22rem at 50% -8%,
+        rgba(16, 185, 129, 0.10), transparent 70%);
+  }
+  .glass-before {
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.04);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    box-shadow:
+      0 8px 32px rgba(0,0,0,0.40),
+      inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     AFTER — Direction B (aurora bg, bento grid, gradient-border hover,
+                          identicons, animated counters, noise overlay)
+     ════════════════════════════════════════════════════════════════ */
+
+  /* Aurora — two slow-drifting conic blobs blurred to soft color fields. */
+  .aurora { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+  .aurora::before, .aurora::after {
+    content: ""; position: absolute; width: 60rem; height: 60rem;
+    border-radius: 9999px; filter: blur(90px); opacity: 0.5;
+    mix-blend-mode: screen;
+  }
+  .aurora::before {
+    top: -25rem; left: -20rem;
+    background: conic-gradient(from 0deg,
+      rgba(16,185,129,0.45),
+      rgba(20,184,166,0.30),
+      rgba(34,197,94,0.40),
+      rgba(16,185,129,0.45));
+    animation: drift-a 26s ease-in-out infinite alternate;
+  }
+  .aurora::after {
+    bottom: -30rem; right: -25rem;
+    background: conic-gradient(from 180deg,
+      rgba(8,145,178,0.30),
+      rgba(20,184,166,0.40),
+      rgba(99,102,241,0.20),
+      rgba(8,145,178,0.30));
+    animation: drift-b 34s ease-in-out infinite alternate;
+  }
+  @keyframes drift-a { to { transform: translate(8rem, 6rem) rotate(40deg); } }
+  @keyframes drift-b { to { transform: translate(-6rem, -8rem) rotate(-30deg); } }
+
+  /* Subtle noise texture — gives the glass a lived-in surface. */
+  .noise {
+    position: absolute; inset: 0; pointer-events: none; opacity: 0.04;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.5'/></svg>");
+    mix-blend-mode: overlay;
+  }
+
+  /* Glass-after: deeper shadow, both insets, saturated blur. */
+  .glass-after {
+    position: relative;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.04);
+    backdrop-filter: blur(24px) saturate(1.5);
+    -webkit-backdrop-filter: blur(24px) saturate(1.5);
+    box-shadow:
+      0 8px 32px rgba(0,0,0,0.42),
+      inset 0 1px 0 rgba(255,255,255,0.10),
+      inset 0 -1px 0 rgba(0,0,0,0.20);
+    transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+                box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1),
+                background 200ms;
+    overflow: hidden;
+  }
+
+  /* Animated conic-gradient ring on hover — uses a pseudo-element with a
+     mask to render only the border thickness. */
+  .glass-after::before {
+    content: "";
+    position: absolute; inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: conic-gradient(from var(--ring-angle, 0deg),
+      transparent 0%,
+      rgba(16,185,129,0.65) 12%,
+      rgba(20,184,166,0.45) 22%,
+      transparent 35%,
+      transparent 100%);
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 200ms;
+    animation: ring-spin 4s linear infinite;
+  }
+  @property --ring-angle { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+  @keyframes ring-spin { to { --ring-angle: 360deg; } }
+  .glass-after:hover { transform: translateY(-2px); }
+  .glass-after:hover::before { opacity: 1; }
+  .glass-after.hero::before { opacity: 0.6; }     /* hero card always glows softly */
+  .glass-after.hero:hover::before { opacity: 1; }
+
+  /* Identicon — generative gradient blob from a deterministic hash. */
+  .identicon {
+    width: 28px; height: 28px; border-radius: 9999px;
+    flex-shrink: 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
+  }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     BEFORE — uniform grid, static numbers
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="relative overflow-hidden border-b border-white/[0.08]">
+  <div class="bg-before"></div>
+
+  <div class="relative z-10 max-w-6xl mx-auto px-8 py-10">
+    <div class="flex items-baseline gap-3 mb-6">
+      <h2 class="text-xs uppercase tracking-[0.25em]" style="color:var(--muted)">Before</h2>
+      <span class="text-[11px]" style="color:#94A3B8aa">uniform 2×4 grid · static $ values · single radial bg</span>
+    </div>
+
+    <div class="grid grid-cols-4 gap-3">
+      <div class="glass-before p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold"
+               style="background:#F0B90B22;color:#F0B90B;border:1px solid #F0B90B33">BB</div>
+          <span class="text-sm">Bybit</span>
+        </div>
+        <div class="text-[10px] mb-1" style="color:var(--muted)">Total</div>
+        <div class="font-mono font-tnum text-base">$10,644.16</div>
+      </div>
+
+      <div class="glass-before p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold"
+               style="background:#F3BA2F22;color:#F3BA2F;border:1px solid #F3BA2F33">BN</div>
+          <span class="text-sm">Binance</span>
+        </div>
+        <div class="text-[10px] mb-1" style="color:var(--muted)">Total</div>
+        <div class="font-mono font-tnum text-base">$3,210.55</div>
+      </div>
+
+      <div class="glass-before p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold"
+               style="background:#FFFFFF22;color:#fff;border:1px solid #FFFFFF33">OK</div>
+          <span class="text-sm">OKX</span>
+        </div>
+        <div class="text-[10px] mb-1" style="color:var(--muted)">Total</div>
+        <div class="font-mono font-tnum text-base">$1,840.20</div>
+      </div>
+
+      <div class="glass-before p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold"
+               style="background:#0B6EF122;color:#0B6EF1;border:1px solid #0B6EF133">MX</div>
+          <span class="text-sm">MEXC</span>
+        </div>
+        <div class="text-[10px] mb-1" style="color:var(--muted)">Total</div>
+        <div class="font-mono font-tnum text-base">$520.00</div>
+      </div>
+
+      <div class="glass-before p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold"
+               style="background:#627EEA22;color:#627EEA;border:1px solid #627EEA33">EVM</div>
+          <span class="text-sm">MM</span>
+        </div>
+        <div class="text-[10px] mb-1" style="color:var(--muted)">Total</div>
+        <div class="font-mono font-tnum text-base">$248.10</div>
+      </div>
+
+      <div class="glass-before p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold"
+               style="background:#9945FF22;color:#9945FF;border:1px solid #9945FF33">SOL</div>
+          <span class="text-sm">SOFLARE</span>
+        </div>
+        <div class="text-[10px] mb-1" style="color:var(--muted)">Total</div>
+        <div class="font-mono font-tnum text-base">$1.28</div>
+      </div>
+
+      <div class="glass-before p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold"
+               style="background:#9945FF22;color:#9945FF;border:1px solid #9945FF33">SOL</div>
+          <span class="text-sm">HYPER</span>
+        </div>
+        <div class="text-[10px] mb-1" style="color:var(--muted)">Total</div>
+        <div class="font-mono font-tnum text-base">$0.55</div>
+      </div>
+
+      <div class="glass-before p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold"
+               style="background:#627EEA22;color:#627EEA;border:1px solid #627EEA33">EVM</div>
+          <span class="text-sm">CODE</span>
+        </div>
+        <div class="text-[10px] mb-1" style="color:var(--muted)">Total</div>
+        <div class="font-mono font-tnum text-base">$92.00</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     AFTER — bento grid + animated counters + aurora + gradient border
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="relative overflow-hidden">
+  <div class="aurora"></div>
+  <div class="noise"></div>
+
+  <div class="relative z-10 max-w-6xl mx-auto px-8 py-10">
+    <div class="flex items-baseline gap-3 mb-6">
+      <h2 class="text-xs uppercase tracking-[0.25em]" style="color:var(--accent)">After</h2>
+      <span class="text-[11px]" style="color:#94A3B8aa">bento layout · animated counters · aurora bg · conic-gradient hover ring · identicons · noise texture</span>
+    </div>
+
+    <!-- Bento grid: 4 cols × 3 rows. Hero spans 2×2; others mix sizes. -->
+    <div class="grid grid-cols-4 grid-rows-3 gap-3 auto-rows-[88px]">
+      <!-- HERO (col-span-2 row-span-2): total balance, big animated counter -->
+      <div class="glass-after hero col-span-2 row-span-2 p-6 flex flex-col justify-between">
+        <div>
+          <div class="text-[10px] uppercase tracking-[0.2em]" style="color:var(--muted)">Total balance</div>
+          <div class="mt-2 flex items-baseline gap-2">
+            <span class="text-[10px]" style="color:var(--muted)">$</span>
+            <span data-counter data-target="16556.84" data-decimals="2"
+                  class="font-mono font-tnum text-5xl tracking-tight"
+                  style="background:linear-gradient(180deg,#F0FDF4 0%,#86EFAC 100%);-webkit-background-clip:text;background-clip:text;color:transparent">
+              0.00
+            </span>
+          </div>
+          <div class="mt-1 text-[11px]" style="color:#94A3B8aa">across 8 sources · USDT $14,952.05 · USDC $1,604.79</div>
+        </div>
+        <div class="flex items-center gap-3 text-[11px]" style="color:var(--muted)">
+          <span class="inline-flex items-center gap-1.5">
+            <span class="relative inline-flex w-1.5 h-1.5">
+              <span class="absolute inset-0 rounded-full opacity-75 animate-ping" style="background:var(--accent)"></span>
+              <span class="relative inline-flex w-1.5 h-1.5 rounded-full" style="background:var(--accent)"></span>
+            </span>
+            live
+          </span>
+          <span>· updated 2s ago</span>
+        </div>
+      </div>
+
+      <!-- Bybit: tall (row-span-2) -->
+      <div class="glass-after row-span-2 p-4 flex flex-col justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold"
+               style="background:#F0B90B22;color:#F0B90B;border:1px solid #F0B90B33">BB</div>
+          <span class="text-sm font-medium">Bybit</span>
+        </div>
+        <div>
+          <div class="text-[10px]" style="color:var(--muted)">Total</div>
+          <div class="font-mono font-tnum text-2xl mt-0.5">
+            $<span data-counter data-target="10644.16" data-decimals="2">0.00</span>
+          </div>
+          <div class="mt-2 space-y-0.5 text-[11px]" style="color:var(--muted)">
+            <div class="flex justify-between"><span>USDT</span><span class="font-mono font-tnum" style="color:var(--fg)">9,802.40</span></div>
+            <div class="flex justify-between"><span>USDC</span><span class="font-mono font-tnum" style="color:var(--fg)">841.76</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Binance -->
+      <div class="glass-after p-4">
+        <div class="flex items-center gap-2 mb-1">
+          <div class="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold"
+               style="background:#F3BA2F22;color:#F3BA2F;border:1px solid #F3BA2F33">BN</div>
+          <span class="text-sm">Binance</span>
+        </div>
+        <div class="font-mono font-tnum text-lg">
+          $<span data-counter data-target="3210.55" data-decimals="2">0.00</span>
+        </div>
+      </div>
+
+      <!-- OKX -->
+      <div class="glass-after p-4">
+        <div class="flex items-center gap-2 mb-1">
+          <div class="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold"
+               style="background:#FFFFFF18;color:#fff;border:1px solid #FFFFFF33">OK</div>
+          <span class="text-sm">OKX</span>
+        </div>
+        <div class="font-mono font-tnum text-lg">
+          $<span data-counter data-target="1840.20" data-decimals="2">0.00</span>
+        </div>
+      </div>
+
+      <!-- MEXC + MM (wallet w/ identicon): wide (col-span-2) -->
+      <div class="glass-after col-span-2 p-4 grid grid-cols-2 gap-4">
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            <div class="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold"
+                 style="background:#0B6EF122;color:#0B6EF1;border:1px solid #0B6EF133">MX</div>
+            <span class="text-sm">MEXC</span>
+          </div>
+          <div class="font-mono font-tnum text-base">
+            $<span data-counter data-target="520.00" data-decimals="2">0.00</span>
+          </div>
+        </div>
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            <svg class="identicon" viewBox="0 0 32 32" data-identicon="0xMM01"></svg>
+            <span class="text-sm">MM</span>
+            <span class="text-[9px] uppercase tracking-wider ml-auto" style="color:#627EEA">EVM</span>
+          </div>
+          <div class="font-mono font-tnum text-base">
+            $<span data-counter data-target="248.10" data-decimals="2">0.00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SOFLARE wallet -->
+      <div class="glass-after p-4">
+        <div class="flex items-center gap-2 mb-1">
+          <svg class="identicon" viewBox="0 0 32 32" data-identicon="SOFLARE"></svg>
+          <span class="text-sm">SOFLARE</span>
+          <span class="text-[9px] uppercase tracking-wider ml-auto" style="color:#9945FF">SOL</span>
+        </div>
+        <div class="font-mono font-tnum text-base">
+          $<span data-counter data-target="1.28" data-decimals="2">0.00</span>
+        </div>
+      </div>
+
+      <!-- HYPER wallet -->
+      <div class="glass-after p-4">
+        <div class="flex items-center gap-2 mb-1">
+          <svg class="identicon" viewBox="0 0 32 32" data-identicon="HYPER"></svg>
+          <span class="text-sm">HYPER</span>
+          <span class="text-[9px] uppercase tracking-wider ml-auto" style="color:#9945FF">SOL</span>
+        </div>
+        <div class="font-mono font-tnum text-base">
+          $<span data-counter data-target="0.55" data-decimals="2">0.00</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="mt-6 text-[11px]" style="color:#94A3B8aa">
+      Hover any After card → animated conic-gradient ring sweeps the border.
+      Numbers tween in once on load (refresh the page to see again).
+      Aurora drifts continuously behind the glass.
+    </p>
+  </div>
+</section>
+
+<script>
+  // ── 1. Animated counters ──────────────────────────────────────────
+  // ease-out cubic, ~1.1s. Updates textContent (no innerHTML) with locale
+  // formatting + tabular numerals. Runs once per element on mount.
+  function animateCounter(el) {
+    const target = parseFloat(el.dataset.target);
+    const decimals = parseInt(el.dataset.decimals || '2', 10);
+    const dur = 1100;
+    const t0 = performance.now();
+    function tick(now) {
+      const t = Math.min(1, (now - t0) / dur);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const v = target * eased;
+      el.textContent = v.toLocaleString('en-US', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+      });
+      if (t < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+  document.querySelectorAll('[data-counter]').forEach(animateCounter);
+
+  // ── 2. Identicon generator ────────────────────────────────────────
+  // Hash the seed to a deterministic pair of hues, paint a radial gradient
+  // wallet avatar via DOM API (no innerHTML). Replaces the boring "W"
+  // placeholder with a per-wallet recognizable mark.
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  function hashSeed(seed) {
+    let h = 2166136261 >>> 0;
+    for (let i = 0; i < seed.length; i++) {
+      h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
+    }
+    return h >>> 0;
+  }
+  function paintIdenticon(svg) {
+    const seed = svg.dataset.identicon || '';
+    const h = hashSeed(seed);
+    const hue1 = h % 360;
+    const hue2 = (hue1 + 60 + (h >>> 8) % 120) % 360;
+    const rotate = (h >>> 16) % 360;
+    const cx1 = 30 + (h >>> 4) % 40;
+    const cy1 = 30 + (h >>> 5) % 40;
+    const id = 'g' + hashSeed(seed + 'g').toString(36);
+
+    const defs = document.createElementNS(SVG_NS, 'defs');
+    const grad = document.createElementNS(SVG_NS, 'radialGradient');
+    grad.setAttribute('id', id);
+    grad.setAttribute('cx', cx1 + '%');
+    grad.setAttribute('cy', cy1 + '%');
+    grad.setAttribute('r', '80%');
+    const stops = [
+      [0,   `hsl(${hue1} 80% 65%)`],
+      [60,  `hsl(${hue2} 75% 50%)`],
+      [100, `hsl(${(hue1 + 200) % 360} 50% 25%)`]
+    ];
+    for (const [offset, color] of stops) {
+      const s = document.createElementNS(SVG_NS, 'stop');
+      s.setAttribute('offset', offset + '%');
+      s.setAttribute('stop-color', color);
+      grad.appendChild(s);
+    }
+    defs.appendChild(grad);
+    svg.appendChild(defs);
+
+    const circle = document.createElementNS(SVG_NS, 'circle');
+    circle.setAttribute('cx', '16');
+    circle.setAttribute('cy', '16');
+    circle.setAttribute('r', '16');
+    circle.setAttribute('fill', `url(#${id})`);
+    circle.setAttribute('transform', `rotate(${rotate} 16 16)`);
+    svg.appendChild(circle);
+  }
+  document.querySelectorAll('[data-identicon]').forEach(paintIdenticon);
+</script>
+
+</body>
+</html>

@@ -5,6 +5,8 @@ import { Button, Input, Row } from './ui'
 import { cn } from '../lib/cn'
 import { useI18n } from '../lib/i18n'
 import type { WalletMeta } from '@shared/types'
+import { sanitizeAddressInput } from '@shared/addresses'
+import { shortAddr } from '@shared/format'
 
 const NETWORK_OPTIONS = [
   { value: 'EVM', label: 'EVM (all EVM chains)' },
@@ -20,10 +22,6 @@ const NETWORK_OPTIONS = [
   { value: 'APT', label: 'Aptos' },
   { value: 'TON', label: 'TON' }
 ]
-
-function shortAddr(addr: string): string {
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`
-}
 
 export function WalletsTab() {
   const { t } = useI18n()
@@ -217,7 +215,7 @@ function AddKeyWalletForm({ onDone }: { onDone: () => void }) {
     setBusy(true)
     const r = await window.api.wallets.add({
       label: label || undefined,
-      privateKey: pk,
+      privateKey: sanitizeAddressInput(pk),
       network: walletType === 'SOL' ? 'SOL' : undefined
     })
     setBusy(false)
@@ -298,7 +296,8 @@ function AddWatchWalletForm({ onDone }: { onDone: () => void }) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!address.trim()) {
+    const cleanAddress = sanitizeAddressInput(address)
+    if (!cleanAddress) {
       setError('Address is required')
       return
     }
@@ -306,7 +305,7 @@ function AddWatchWalletForm({ onDone }: { onDone: () => void }) {
     setBusy(true)
     const r = await window.api.wallets.add({
       label: label || undefined,
-      address: address.trim(),
+      address: cleanAddress,
       network
     })
     setBusy(false)

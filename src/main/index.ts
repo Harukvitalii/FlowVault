@@ -24,8 +24,10 @@ import {
 } from './vault'
 import {
   detectChain,
+  latestLatencies,
   pingMany,
   pingRpc,
+  refreshLatenciesNow,
   startBackgroundPinger,
   stopBackgroundPinger
 } from './rpc'
@@ -56,13 +58,16 @@ import {
 import { checkEvmStatus, preflightEvmSend, submitEvmSend } from './evm-send'
 import { loadFromDisk, wipeDiskCache } from './cache-store'
 import { getEvmWalletBalances } from './evm'
-import { getSolanaBalances, sendSolanaTransfer } from './solana'
+import { confirmFinalized, getSolanaBalances, sendSolanaTransfer } from './solana'
+import { withIdempotency } from './idempotency'
 import {
+  addPending as addPendingWithdrawal,
   clear as clearWithdrawals,
   list as listWithdrawals,
   remove as removeWithdrawal,
   setStatusFetcher,
   startPoller as startWithdrawalsPoller,
+  update as updateWithdrawal,
   wipeHistory
 } from './withdrawals'
 import type {
@@ -80,17 +85,29 @@ import type {
 
 const isDev = !!process.env['ELECTRON_RENDERER_URL']
 
-/** Lightweight runtime guard — ensures a value is a non-empty string. */
+/**
+ * Throws an error whose stack does not include main-process file paths.
+ * Electron forwards the full Error (message + stack) across IPC by default;
+ * raw `new Error(...)` would expose `src/main/index.ts:NN` in the renderer.
+ */
+function ipcInputError(): Error {
+  const err = new Error('invalid input')
+  err.name = 'IpcInputError'
+  err.stack = 'IpcInputError: invalid input'
+  return err
+}
+
+/** Lightweight runtime guards — ensure a value matches the expected shape. */
 function str(v: unknown): string {
-  if (typeof v !== 'string' || !v) throw new Error('expected non-empty string')
+  if (typeof v !== 'string' || !v) throw ipcInputError()
   return v
 }
 function num(v: unknown): number {
-  if (typeof v !== 'number' || !Number.isFinite(v)) throw new Error('expected finite number')
+  if (typeof v !== 'number' || !Number.isFinite(v)) throw ipcInputError()
   return v
 }
 function obj(v: unknown): Record<string, unknown> {
-  if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('expected object')
+  if (!v || typeof v !== 'object' || Array.isArray(v)) throw ipcInputError()
   return v as Record<string, unknown>
 }
 
@@ -113,7 +130,9 @@ function createWindow() {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false
     }
   })
 
@@ -121,6 +140,15 @@ function createWindow() {
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = null
   })
+
+  // In production, immediately close DevTools if anything (default
+  // accelerator, user, or otherwise) opens it. Renderer state would expose
+  // unlocked-vault credentials, master-key prompt, and IPC payloads.
+  if (!isDev) {
+    win.webContents.on('devtools-opened', () => {
+      win.webContents.closeDevTools()
+    })
+  }
 
   win.on('ready-to-show', () => {
     win.show()
@@ -242,7 +270,7 @@ app.whenReady().then(async () => {
   ipcMain.handle(
     'exchanges:getDepositAddressesForPairs',
     (_e, accountId: unknown, pairs: unknown) => {
-      if (!Array.isArray(pairs)) throw new Error('expected array')
+      if (!Array.isArray(pairs)) throw ipcInputError()
       return getDepositAddressesForPairs(str(accountId), pairs as CoinNetworkPair[])
     }
   )
@@ -252,15 +280,20 @@ app.whenReady().then(async () => {
   ipcMain.handle('exchanges:warmup', () => warmup())
   ipcMain.handle('exchanges:withdraw', (_e, input: unknown) => {
     const o = obj(input)
-    return submitWithdraw({
-      accountId: str(o.accountId),
-      coin: str(o.coin),
-      network: str(o.network),
-      amount: num(o.amount),
-      address: str(o.address),
-      tag: typeof o.tag === 'string' ? o.tag : undefined,
-      destLabel: typeof o.destLabel === 'string' ? o.destLabel : undefined
-    })
+    const submitId = typeof o.submitId === 'string' ? o.submitId : undefined
+    return withIdempotency(submitId, () =>
+      submitWithdraw({
+        accountId: str(o.accountId),
+        coin: str(o.coin),
+        network: str(o.network),
+        amount: num(o.amount),
+        amountStr: typeof o.amountStr === 'string' ? o.amountStr : undefined,
+        address: str(o.address),
+        tag: typeof o.tag === 'string' ? o.tag : undefined,
+        destLabel: typeof o.destLabel === 'string' ? o.destLabel : undefined,
+        submitId
+      })
+    )
   })
   ipcMain.handle(
     'exchanges:transfer',
@@ -300,15 +333,20 @@ app.whenReady().then(async () => {
   })
   ipcMain.handle('evm:submit', (_e, input: unknown) => {
     const o = obj(input)
-    return submitEvmSend({
-      walletId: str(o.walletId),
-      coin: str(o.coin),
-      amount: num(o.amount),
-      chainId: num(o.chainId),
-      toAddress: str(o.toAddress),
-      destCexAccountId: typeof o.destCexAccountId === 'string' ? o.destCexAccountId : undefined,
-      destLabel: typeof o.destLabel === 'string' ? o.destLabel : undefined
-    })
+    const submitId = typeof o.submitId === 'string' ? o.submitId : undefined
+    return withIdempotency(submitId, () =>
+      submitEvmSend({
+        walletId: str(o.walletId),
+        coin: str(o.coin),
+        amount: num(o.amount),
+        amountStr: typeof o.amountStr === 'string' ? o.amountStr : undefined,
+        chainId: num(o.chainId),
+        toAddress: str(o.toAddress),
+        destCexAccountId: typeof o.destCexAccountId === 'string' ? o.destCexAccountId : undefined,
+        destLabel: typeof o.destLabel === 'string' ? o.destLabel : undefined,
+        submitId
+      })
+    )
   })
 
   // Withdrawals
@@ -342,18 +380,68 @@ app.whenReady().then(async () => {
   ipcMain.handle('wallets:getSolBalances', (_e, address: unknown) =>
     getSolanaBalances(str(address))
   )
-  ipcMain.handle('solana:send', (_e, input: unknown) => {
+  ipcMain.handle('solana:send', async (_e, input: unknown) => {
     const o = obj(input)
+    const submitId = typeof o.submitId === 'string' ? o.submitId : undefined
+    return withIdempotency(submitId, async () => {
     const walletId = str(o.walletId)
     const w = getWalletKeyAndNetwork(walletId)
     if (!w || w.network !== 'SOL') {
       return { ok: false, error: 'wallet not found or not a Solana wallet' }
     }
-    return sendSolanaTransfer({
+    const coin = str(o.coin)
+    const amount = num(o.amount)
+    const amountStr = typeof o.amountStr === 'string' ? o.amountStr : undefined
+    const toAddress = str(o.toAddress)
+    const destLabel = typeof o.destLabel === 'string' ? o.destLabel : undefined
+
+    const record = await addPendingWithdrawal({
+      kind: 'evm',
+      exchangeAccountId: walletId,
+      exchangeLabel: 'Solana wallet',
+      coin,
+      network: 'SOL',
+      amount,
+      fee: 0,
+      address: toAddress,
+      destLabel
+    })
+
+    const r = await sendSolanaTransfer({
       secretKey: w.privateKey,
-      toAddress: str(o.toAddress),
-      coin: str(o.coin),
-      amount: num(o.amount)
+      toAddress,
+      coin,
+      amount,
+      amountStr
+    })
+    if (r.ok && r.txHash) {
+      // Confirmed (sub-second) — but Solana 'confirmed' is reorg-eligible.
+      // Mark 'processing' for the UI and asynchronously upgrade to 'ok' once
+      // the signature reaches 'finalized' commitment (~13s typical).
+      await updateWithdrawal(record.id, {
+        status: 'processing',
+        exchangeTxId: r.txHash,
+        chainTxHash: r.txHash
+      })
+      const txHash = r.txHash
+      confirmFinalized(txHash)
+        .then((res) => {
+          if (res.ok) {
+            return updateWithdrawal(record.id, { status: 'ok' })
+          }
+          return updateWithdrawal(record.id, {
+            status: 'failed',
+            error: res.error ?? 'not finalized'
+          })
+        })
+        .catch(() => undefined)
+      return { ok: true, txHash, recordId: record.id }
+    }
+    await updateWithdrawal(record.id, {
+      status: 'failed',
+      error: r.error
+    })
+    return { ok: false, error: r.error }
     })
   })
 
@@ -364,7 +452,7 @@ app.whenReady().then(async () => {
   // RPC
   ipcMain.handle('rpc:list', () => listRpcs())
   ipcMain.handle('rpc:save', (_e, rpcs: unknown) => {
-    if (!Array.isArray(rpcs)) throw new Error('expected array')
+    if (!Array.isArray(rpcs)) throw ipcInputError()
     return saveRpcs(rpcs as RpcEntry[])
   })
   ipcMain.handle('rpc:detect', (_e, url: unknown) => detectChain(str(url)))
@@ -372,10 +460,12 @@ app.whenReady().then(async () => {
   ipcMain.handle(
     'rpc:pingMany',
     (_e, entries: unknown) => {
-      if (!Array.isArray(entries)) throw new Error('expected array')
+      if (!Array.isArray(entries)) throw ipcInputError()
       return pingMany(entries as { id: string; url: string }[])
     }
   )
+  ipcMain.handle('rpc:latest', () => latestLatencies())
+  ipcMain.handle('rpc:refresh', () => refreshLatenciesNow())
 
   createWindow()
 

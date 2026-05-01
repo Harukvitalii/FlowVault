@@ -24,6 +24,16 @@ type DetectState =
   | { kind: 'ok'; ip: string }
   | { kind: 'error'; message: string }
 
+/** Strict literal-IP check. Accepts IPv4 dotted-quad (each octet 0-255) and
+ *  a broad IPv6 shape (hex groups, optional ::). Rejects hostnames, HTML,
+ *  whitespace, or any other shape that should never come from the IP API. */
+function isPublicIpLiteral(s: string): boolean {
+  if (!s || s.length > 45) return false
+  const v4 = s.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (v4) return v4.slice(1).every((p) => Number(p) >= 0 && Number(p) <= 255)
+  return /^(?:[0-9a-fA-F]{1,4}:){2,7}[0-9a-fA-F]{0,4}$/.test(s) || /^::1?$/.test(s)
+}
+
 export function SetupTab() {
   const [ipState, setIpState] = useState<DetectState>({ kind: 'idle' })
   const [copied, setCopied] = useState(false)
@@ -37,9 +47,14 @@ export function SetupTab() {
         signal: controller.signal
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = (await res.json()) as { ip?: string }
-      if (!data.ip) throw new Error('no ip')
-      setIpState({ kind: 'ok', ip: data.ip })
+      const data = (await res.json()) as { ip?: unknown }
+      const ip = typeof data.ip === 'string' ? data.ip.trim() : ''
+      // Strict IPv4 dotted-quad or IPv6 — reject anything that is not a literal
+      // address. Defends against DNS hijack / cert mis-issuance returning HTML
+      // or attacker-controlled strings that the user might paste into an
+      // exchange whitelist.
+      if (!isPublicIpLiteral(ip)) throw new Error('invalid ip response')
+      setIpState({ kind: 'ok', ip })
     } catch (err) {
       setIpState({
         kind: 'error',

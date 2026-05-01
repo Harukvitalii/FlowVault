@@ -122,6 +122,8 @@ const ACCOUNT_TYPES: Record<ExchangeId, string[]> = {
 }
 
 import { WITHDRAW_TYPE, ccxtTransferType } from '../shared/exchanges'
+import { isValidForNetwork } from '../shared/addresses'
+import { mask } from './log'
 export { WITHDRAW_TYPE }
 
 /**
@@ -1285,13 +1287,30 @@ export async function submitWithdraw(
   const creds = getExchangeCreds(input.accountId)
   if (!creds) return { ok: false, error: 'account not found (vault locked?)' }
 
-  // Fee from cached networks if available — for the local record only.
+  // Server-side guards. The renderer enforces these too, but a compromised
+  // renderer or skipped preflight must not be able to bypass them.
+  if (!input.address || !isValidForNetwork(input.network, input.address)) {
+    return { ok: false, error: 'destination address does not match the selected network' }
+  }
+  if (!Number.isFinite(input.amount) || input.amount <= 0) {
+    return { ok: false, error: 'invalid amount' }
+  }
+
+  // Fee + min-withdraw from cached networks if available.
   const cachedNetworks = currenciesCache.get(input.accountId)
-  const feeFromCache = cachedNetworks
+  const networkInfo = cachedNetworks
     ? sliceNetworks(cachedNetworks.data, input.coin).find(
         (n) => n.network === input.network
-      )?.fee ?? 0
-    : 0
+      )
+    : undefined
+  const feeFromCache = networkInfo?.fee ?? 0
+  const minWithdraw = networkInfo?.minWithdraw ?? 0
+  if (minWithdraw > 0 && input.amount < minWithdraw) {
+    return {
+      ok: false,
+      error: `below minimum: ${minWithdraw} ${input.coin.toUpperCase()} on ${input.network}`
+    }
+  }
 
   const record = await addPendingWithdrawal({
     exchangeAccountId: input.accountId,
@@ -1310,7 +1329,7 @@ export async function submitWithdraw(
   if (creds.exchange === 'phemex') {
     try {
       console.log(
-        `[phemex] withdraw ${input.amount} ${input.coin} → ${input.address} via ${input.network}`
+        `[phemex] withdraw ${input.coin} → ${mask(input.address)} via ${input.network}`
       )
       const res = await phemexApi.createWithdraw(
         creds, input.coin, input.address, input.amount, input.network, input.tag
@@ -1319,6 +1338,7 @@ export async function submitWithdraw(
         status: 'pending',
         exchangeTxId: res.id
       })
+      balanceCache.delete(input.accountId)
       return { ok: true, recordId: record.id }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'failed'
@@ -1332,7 +1352,7 @@ export async function submitWithdraw(
   try {
     const client = getClient(input.accountId)
     console.log(
-      `[exchanges] withdraw ${input.accountId} · ${input.amount} ${input.coin} → ${input.address} via ${input.network}`
+      `[exchanges] withdraw ${input.accountId} · ${input.coin} → ${mask(input.address)} via ${input.network}`
     )
     const res = (await withTimeout(
       client.withdraw(
@@ -1355,6 +1375,7 @@ export async function submitWithdraw(
       status: 'pending',
       exchangeTxId
     })
+    balanceCache.delete(input.accountId)
     return { ok: true, recordId: record.id }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'failed'

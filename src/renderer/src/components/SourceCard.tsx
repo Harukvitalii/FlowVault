@@ -1,7 +1,10 @@
+import { memo } from 'react'
 import { AlertTriangle, Eye, Loader2, Wallet } from 'lucide-react'
 import { GlassCard } from './GlassCard'
 import { cn } from '../lib/cn'
 import type { Source } from '../data/sources'
+import { shortAddr } from '@shared/format'
+import { useCountUp } from '../lib/useCountUp'
 
 type Props = {
   source: Source
@@ -11,13 +14,10 @@ type Props = {
   hideBalances?: boolean
 }
 
-function shortAddr(addr: string): string {
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`
-}
-
-export function SourceCard({ source, selected, onSelect, hideBalances }: Props) {
+function SourceCardImpl({ source, selected, onSelect, hideBalances }: Props) {
   const totalUsd =
     source.balances?.reduce((acc, b) => acc + b.usd, 0) ?? null
+  const animatedTotal = useCountUp(totalUsd, source.id)
   const watchOnly = source.canSend === false
 
   return (
@@ -46,14 +46,20 @@ export function SourceCard({ source, selected, onSelect, hideBalances }: Props) 
         <span
           className={cn(
             'text-[10px] uppercase tracking-wider font-semibold shrink-0',
-            source.kind === 'cex' ? 'text-fg-muted' : 'text-[#627EEA]'
+            source.kind === 'cex'
+              ? 'text-fg-muted'
+              : source.network === 'SOL'
+                ? 'text-[#9945FF]'
+                : 'text-[#627EEA]'
           )}
         >
           {source.kind === 'cex'
             ? 'CEX'
-            : source.canSend === false
-              ? source.network ?? 'WATCH'
-              : 'EVM'}
+            : source.network
+              ? source.network
+              : source.canSend === false
+                ? 'WATCH'
+                : 'EVM'}
         </span>
       </div>
 
@@ -74,7 +80,8 @@ export function SourceCard({ source, selected, onSelect, hideBalances }: Props) 
         ) : (
           <div className="font-mono font-tnum text-lg text-fg">
             $
-            {totalUsd!.toLocaleString('en-US', {
+            {(animatedTotal ?? 0).toLocaleString('en-US', {
+              minimumFractionDigits: 2,
               maximumFractionDigits: 2
             })}
           </div>
@@ -133,3 +140,10 @@ export function SourceCard({ source, selected, onSelect, hideBalances }: Props) 
     </GlassCard>
   )
 }
+
+/**
+ * Memoized: identity of `source` is preserved across Dashboard refreshes
+ * (only the matching record is replaced inside fetchAllBalances), so
+ * unrelated tick re-renders skip re-rendering the entire grid.
+ */
+export const SourceCard = memo(SourceCardImpl)

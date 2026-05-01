@@ -69,8 +69,55 @@ let unlockedKey: Buffer | null = null
 let unlockedData: VaultData | null = null
 let unlockFailCount = 0
 let unlockLockedUntil = 0
+let lockoutLoaded = false
 
 const vaultPath = () => join(app.getPath('userData'), VAULT_FILE)
+const lockoutPath = () => join(app.getPath('userData'), 'vault.lockout.json')
+
+/**
+ * Load the lockout counter from disk (best-effort). Without this, an attacker
+ * with a stolen vault file can bypass the exponential backoff just by
+ * restarting the app between attempts.
+ */
+async function loadLockout(): Promise<void> {
+  if (lockoutLoaded) return
+  lockoutLoaded = true
+  try {
+    if (!existsSync(lockoutPath())) return
+    const raw = await readFile(lockoutPath(), 'utf8')
+    const data = JSON.parse(raw) as { count?: unknown; lockedUntil?: unknown }
+    if (typeof data.count === 'number' && data.count >= 0) unlockFailCount = data.count
+    if (typeof data.lockedUntil === 'number' && data.lockedUntil > 0) {
+      unlockLockedUntil = data.lockedUntil
+    }
+  } catch {
+    // Corrupt file → start clean. Don't lock the user out forever on parse error.
+  }
+}
+
+async function saveLockout(): Promise<void> {
+  try {
+    const tmp = lockoutPath() + '.tmp'
+    await writeFile(
+      tmp,
+      JSON.stringify({ count: unlockFailCount, lockedUntil: unlockLockedUntil }),
+      { mode: 0o600 }
+    )
+    await rename(tmp, lockoutPath())
+    await chmod(lockoutPath(), 0o600).catch(() => undefined)
+  } catch {
+    // Disk full / permission error — keep going; in-memory state still works
+    // for this session.
+  }
+}
+
+async function clearLockoutFile(): Promise<void> {
+  try {
+    if (existsSync(lockoutPath())) await unlink(lockoutPath())
+  } catch {
+    // best-effort
+  }
+}
 
 const MIN_MASTER_KEY_LEN = 8
 
@@ -126,8 +173,17 @@ function migrate(raw: unknown): VaultData {
       typeof w.id !== 'string' ||
       typeof w.address !== 'string'
     ) continue
-    // Validate private key if present (watch-only wallets have none).
-    if (w.privateKey != null && (typeof w.privateKey !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(w.privateKey))) continue
+    // Validate private key if present (watch-only wallets have none). EVM keys
+    // are 0x + 64 hex; Solana keys are base58 / JSON-array strings — accept any
+    // non-empty string for non-EVM networks and let the chain client reject on use.
+    if (w.privateKey != null) {
+      if (typeof w.privateKey !== 'string') continue
+      if (w.network === 'SOL') {
+        if (w.privateKey.length === 0) continue
+      } else if (!/^0x[0-9a-fA-F]{64}$/.test(w.privateKey)) {
+        continue
+      }
+    }
     wallets[k] = {
       id: w.id,
       label: typeof w.label === 'string' ? w.label : `Wallet`,
@@ -198,7 +254,9 @@ export async function createVault(masterKey: string): Promise<{ ok: boolean; err
 export async function unlockVault(
   masterKey: string
 ): Promise<{ ok: boolean; error?: string }> {
-  // Brute-force protection: exponential backoff after failed attempts.
+  // Persisted across restarts so an attacker with the encrypted vault file
+  // cannot reset the backoff window by re-launching the app.
+  await loadLockout()
   const now = Date.now()
   if (now < unlockLockedUntil) {
     const waitSec = Math.ceil((unlockLockedUntil - now) / 1000)
@@ -218,12 +276,15 @@ export async function unlockVault(
     unlockedData = migrate(JSON.parse(plain.toString('utf8')))
     unlockedKey = key
     unlockFailCount = 0
+    unlockLockedUntil = 0
+    await clearLockoutFile()
     return { ok: true }
   } catch {
     unlockFailCount++
     // Back off: 1s, 2s, 4s, 8s, 16s, 30s cap
     const delaySec = Math.min(30, Math.pow(2, unlockFailCount - 1))
     unlockLockedUntil = Date.now() + delaySec * 1000
+    await saveLockout()
     return { ok: false, error: 'wrong master key' }
   }
 }
@@ -273,6 +334,9 @@ export async function changeMasterKey(
 export async function wipeVault(): Promise<{ ok: boolean }> {
   lockVault()
   if (existsSync(vaultPath())) await unlink(vaultPath())
+  unlockFailCount = 0
+  unlockLockedUntil = 0
+  await clearLockoutFile()
   return { ok: true }
 }
 

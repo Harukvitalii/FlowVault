@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Titlebar } from './components/Titlebar'
+import { ToasterProvider } from './components/Toaster'
+import { DepositToastWatcher } from './components/DepositToastWatcher'
+import { resetCountUp } from './lib/useCountUp'
 import { LockPage } from './pages/Lock'
 import { DashboardPage } from './pages/Dashboard'
 import { SettingsPage } from './pages/Settings'
@@ -31,11 +34,14 @@ export default function App() {
 
   const lock = async () => {
     await window.api.vault.lock()
+    resetCountUp() // next unlock should play the intro again
     setVaultState('locked')
     setView('dashboard')
   }
 
   return (
+    <ToasterProvider>
+    {unlocked && <DepositToastWatcher />}
     <div className="h-full flex flex-col text-fg overflow-hidden">
       <div className="bg-ambient" />
       <Titlebar
@@ -67,5 +73,6 @@ export default function App() {
         </div>
       )}
     </div>
+    </ToasterProvider>
   )
 }

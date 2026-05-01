@@ -3,7 +3,6 @@ import {
   AlertTriangle,
   ArrowRight,
   Check,
-  Copy,
   Loader2,
   MoveRight,
   Sparkles
@@ -26,6 +25,7 @@ import {
 import { isValidAddress, addressFormatHint, networkClassOf } from '@shared/addresses'
 import { etaMinutes, formatEta } from '@shared/eta'
 import { ConfirmWithdrawModal } from './ConfirmWithdrawModal'
+import { CopyButton } from './CopyButton'
 import type { Source } from '../data/sources'
 import { SUPPORTED_COINS, type CoinSymbol } from '../data/sources'
 import { GlassCard } from './GlassCard'
@@ -53,7 +53,18 @@ type AddressState =
   | { status: 'ok'; addresses: DepositAddressEntry[] }
   | { status: 'error'; message: string }
 
-type Mode = 'cex-cex' | 'cex-evm' | 'evm-cex' | 'evm-evm' | 'none'
+type Mode = 'cex-cex' | 'cex-onchain' | 'onchain-cex' | 'onchain-onchain' | 'none'
+
+/**
+ * For non-CEX (kind='evm') sources, the actual on-chain family. Solana wallets
+ * are stored as kind='evm' + network='SOL'; treat them as 'SOL'. Anything
+ * else is bucketed as 'EVM' (matches any EVM family on the other side).
+ */
+function walletFamily(s: Source | null | undefined): string {
+  if (!s || s.kind !== 'evm') return ''
+  const fam = networkFamily(s.network ?? '')
+  return fam === 'SOL' ? 'SOL' : 'EVM'
+}
 
 export function ActionPanel({ source, sources, onRefresh }: Props) {
   const { t } = useI18n()
@@ -86,16 +97,19 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
     }
   }, [availableCoins, coin])
 
+  const sourceWalletFam = walletFamily(source)
+  const destWalletFam = walletFamily(dest)
+
   const mode: Mode = !dest
     ? 'none'
     : source.kind === 'cex' && dest.kind === 'cex'
       ? 'cex-cex'
       : source.kind === 'cex' && dest.kind === 'evm'
-        ? 'cex-evm'
+        ? 'cex-onchain'
         : source.kind === 'evm' && dest.kind === 'cex'
-          ? 'evm-cex'
+          ? 'onchain-cex'
           : source.kind === 'evm' && dest.kind === 'evm'
-            ? 'evm-evm'
+            ? 'onchain-onchain'
             : 'none'
 
   // ---------------- Source side ----------------
@@ -240,37 +254,96 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
   // ---------------- Smart pick ----------------
   // Declared AFTER sourceFamily/destFamily so the closures don't hit a
   // temporal-dead-zone error on first render.
-  const smartSourcePick = useMemo(() => {
-    if (source.kind !== 'cex' || sourceNets.status !== 'ok') return ''
-    const candidates = sourceNets.networks.filter((n) => {
-      if (!n.withdrawEnabled) return false
-      if (dest?.kind === 'evm') return isEvmFamily(networkFamily(n.network))
-      if (destFamily) return networkFamily(n.network) === destFamily
-      return true
-    })
-    if (candidates.length === 0) return ''
-    let best = candidates[0]!
-    for (const c of candidates) {
-      if (smartPickScore(c) < smartPickScore(best)) best = c
-    }
-    return best.network
-  }, [source.kind, sourceNets, dest, destFamily])
+  // Predicate: does network code `n` satisfy a wallet-family requirement?
+  // 'EVM' → any EVM-compatible family. 'SOL' → only SOL. '' → no constraint.
+  const matchesWalletFamily = (n: string, fam: string): boolean => {
+    if (!fam) return true
+    const f = networkFamily(n)
+    return fam === 'EVM' ? isEvmFamily(f) : f === fam
+  }
 
-  const smartDestPick = useMemo(() => {
-    if (dest?.kind !== 'cex' || destNets.status !== 'ok') return ''
-    const candidates = destNets.networks.filter((n) => {
-      if (!n.depositEnabled) return false
-      if (source.kind === 'evm') return isEvmFamily(networkFamily(n.network))
-      if (sourceFamily) return networkFamily(n.network) === sourceFamily
-      return true
-    })
-    if (candidates.length === 0) return ''
-    let best = candidates[0]!
-    for (const c of candidates) {
-      if (smartPickScore(c) < smartPickScore(best)) best = c
+  // Single "best route" computation: deposit is free across every CEX, so
+  // the only cost that matters is the withdraw fee. We pick the cheapest
+  // withdraw network whose family is also depositable on the destination
+  // (or matches the destination wallet's family for cex-onchain), then
+  // light up the matching family on BOTH sides — same chain, same badge.
+  // Static — never recomputes off user clicks.
+  const smartRoute = useMemo<{ sourceCode: string; destCode: string } | null>(() => {
+    // CEX → CEX: cross-reference both lists, pick cheapest withdraw whose
+    // family is depositable on the dest, then find the matching dest code.
+    if (
+      source.kind === 'cex' &&
+      dest?.kind === 'cex' &&
+      sourceNets.status === 'ok' &&
+      destNets.status === 'ok'
+    ) {
+      const depositableByFamily = new Map<string, NetworkInfo>()
+      for (const n of destNets.networks) {
+        if (!n.depositEnabled) continue
+        const fam = networkFamily(n.network)
+        if (!fam) continue
+        // Keep the first depositable code per family — there is usually
+        // only one and the deposit list isn't ranked by cost (deposit free).
+        if (!depositableByFamily.has(fam)) depositableByFamily.set(fam, n)
+      }
+      const candidates = sourceNets.networks.filter((n) => {
+        if (!n.withdrawEnabled) return false
+        return depositableByFamily.has(networkFamily(n.network))
+      })
+      if (candidates.length === 0) return null
+      let best = candidates[0]!
+      for (const c of candidates) {
+        if (smartPickScore(c) < smartPickScore(best)) best = c
+      }
+      const destNet = depositableByFamily.get(networkFamily(best.network))
+      if (!destNet) return null
+      return { sourceCode: best.network, destCode: destNet.network }
     }
-    return best.network
-  }, [dest, destNets, source.kind, sourceFamily])
+
+    // CEX → wallet: cheapest withdraw matching the wallet's family.
+    if (
+      source.kind === 'cex' &&
+      dest?.kind === 'evm' &&
+      destWalletFam &&
+      sourceNets.status === 'ok'
+    ) {
+      const candidates = sourceNets.networks.filter(
+        (n) => n.withdrawEnabled && matchesWalletFamily(n.network, destWalletFam)
+      )
+      if (candidates.length === 0) return null
+      let best = candidates[0]!
+      for (const c of candidates) {
+        if (smartPickScore(c) < smartPickScore(best)) best = c
+      }
+      return { sourceCode: best.network, destCode: '' }
+    }
+
+    // Wallet → CEX: source side has no network picker; pick cheapest deposit
+    // matching source wallet's family.
+    if (
+      source.kind === 'evm' &&
+      dest?.kind === 'cex' &&
+      sourceWalletFam &&
+      destNets.status === 'ok'
+    ) {
+      const candidates = destNets.networks.filter(
+        (n) => n.depositEnabled && matchesWalletFamily(n.network, sourceWalletFam)
+      )
+      if (candidates.length === 0) return null
+      // For deposit-only side, score by minDeposit then fam alpha — deposit
+      // free everywhere so this is a tie-break, mostly preserves current order.
+      let best = candidates[0]!
+      for (const c of candidates) {
+        if ((c.minDeposit ?? 0) < (best.minDeposit ?? 0)) best = c
+      }
+      return { sourceCode: '', destCode: best.network }
+    }
+
+    return null
+  }, [source.kind, dest, sourceNets, destNets, destWalletFam, sourceWalletFam])
+
+  const smartSourcePick = smartRoute?.sourceCode ?? ''
+  const smartDestPick = smartRoute?.destCode ?? ''
 
   // Auto-adopt smart pick on first render after networks load (but never
   // overwrite a user's explicit click).
@@ -285,6 +358,21 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
     }
   }, [smartDestPick, touchedDest, depositNet])
 
+  // Auto-mirror: when withdrawNet is set and deposit side hasn't been touched,
+  // pick the matching family on the deposit side automatically.
+  useEffect(() => {
+    if (!withdrawNet || touchedDest || !dest || dest.kind !== 'cex') return
+    if (depositList.length === 0) return
+    const fam = source.kind === 'evm' ? networkFamily(withdrawNet) : networkFamily(withdrawNet)
+    if (!fam) return
+    const match = depositList.find(
+      (n) => n.depositEnabled && networkFamily(n.network) === fam
+    )
+    if (match && match.network !== depositNet) {
+      setDepositNet(match.network)
+    }
+  }, [withdrawNet, depositList, touchedDest, dest, source.kind, depositNet])
+
   // Mode-aware cross-chain compatibility. For EVM destinations, we require
   // the source network to actually be EVM-compatible; for EVM sources, the
   // destination network must be EVM. For cex-cex, families must match exactly.
@@ -292,6 +380,13 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
     | { kind: 'pending' } // not enough input yet
     | { kind: 'ok'; family: string }
     | { kind: 'bad'; reason: string }
+
+  // Does an exchange-network family `f` satisfy a wallet family `walletFam`?
+  // For 'EVM' wallet → any EVM family. For 'SOL' → only SOL. Else: equal.
+  const familyOkForWallet = (f: string, walletFam: string): boolean => {
+    if (!f || !walletFam) return false
+    return walletFam === 'EVM' ? isEvmFamily(f) : f === walletFam
+  }
 
   const compat: Compat = (() => {
     if (mode === 'cex-cex') {
@@ -303,21 +398,25 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
             reason: t('differentChains').replace('{a}', familyLabel(sourceFamily)).replace('{b}', familyLabel(destFamily))
           }
     }
-    if (mode === 'cex-evm') {
+    if (mode === 'cex-onchain') {
       if (!sourceFamily) return { kind: 'pending' }
-      return isEvmFamily(sourceFamily)
+      return familyOkForWallet(sourceFamily, destWalletFam)
         ? { kind: 'ok', family: sourceFamily }
         : {
             kind: 'bad',
-            reason: t('notEvmCompatible').replace('{chain}', familyLabel(sourceFamily))
+            reason: destWalletFam === 'SOL'
+              ? t('notSolCompatible').replace('{chain}', familyLabel(sourceFamily))
+              : t('notEvmCompatible').replace('{chain}', familyLabel(sourceFamily))
           }
     }
-    if (mode === 'evm-cex') {
+    if (mode === 'onchain-cex') {
       if (!sourceFamily || !destFamily) return { kind: 'pending' }
-      if (!isEvmFamily(destFamily)) {
+      if (!familyOkForWallet(destFamily, sourceWalletFam)) {
         return {
           kind: 'bad',
-          reason: t('cannotSendFromEvm').replace('{chain}', familyLabel(destFamily))
+          reason: sourceWalletFam === 'SOL'
+            ? t('cannotSendFromSol').replace('{chain}', familyLabel(destFamily))
+            : t('cannotSendFromEvm').replace('{chain}', familyLabel(destFamily))
         }
       }
       return sourceFamily === destFamily
@@ -327,7 +426,15 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
             reason: t('differentChains').replace('{a}', familyLabel(sourceFamily)).replace('{b}', familyLabel(destFamily))
           }
     }
-    if (mode === 'evm-evm') {
+    if (mode === 'onchain-onchain') {
+      if (sourceWalletFam !== destWalletFam) {
+        return {
+          kind: 'bad',
+          reason: t('differentChains')
+            .replace('{a}', familyLabel(sourceWalletFam))
+            .replace('{b}', familyLabel(destWalletFam))
+        }
+      }
       if (!sourceFamily) return { kind: 'pending' }
       return { kind: 'ok', family: sourceFamily }
     }
@@ -441,10 +548,11 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
     !!dest &&
     ((source.kind === 'cex' && !!withdrawInfo) ||
       (source.kind === 'evm' && !!withdrawNet)) &&
-    (mode === 'cex-cex' || mode === 'evm-cex' ? !!depositInfo : true) &&
+    (mode === 'cex-cex' || mode === 'onchain-cex' ? !!depositInfo : true) &&
     familiesMatch &&
     !!selectedAddrEntry &&
-    addressOk !== false &&
+    !!addressFamily &&
+    addressOk === true &&
     amount > 0 &&
     amount <= maxAmount &&
     (withdrawInfo ? amount >= (withdrawInfo.minWithdraw ?? 0) : true)
@@ -477,7 +585,7 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
             >
               {d.name}
               <span className="text-[9px] uppercase tracking-wider text-fg-muted/70 ml-1.5">
-                {d.kind}
+                {d.kind === 'evm' ? walletFamily(d).toLowerCase() : d.kind}
               </span>
             </Pill>
           ))}
@@ -518,7 +626,7 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
               onSelect={setWithdrawNetTouched}
               filter={(n) => n.withdrawEnabled}
               highlightFamily={destFamily || undefined}
-              requireEvm={dest?.kind === 'evm'}
+              requireFamily={destWalletFam || undefined}
               coin={coin}
               smartPick={smartSourcePick}
               side="withdraw"
@@ -574,29 +682,39 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
               onSelect={setDepositNetTouched}
               filter={(n) => n.depositEnabled}
               highlightFamily={sourceFamily || undefined}
-              requireEvm={source.kind === 'evm'}
+              requireFamily={sourceWalletFam || undefined}
               coin={coin}
               smartPick={smartDestPick}
               side="deposit"
             />
           </Field>
         ) : (
-          <Field label={dest?.kind === 'evm' ? `${t('destination')} (EVM)` : t('destination')}>
+          <Field
+            label={
+              dest?.kind === 'evm'
+                ? `${t('destination')} (${destWalletFam})`
+                : t('destination')
+            }
+          >
             <div className="text-xs text-fg-muted/70 h-8 flex items-center">
-              {dest?.kind === 'evm' ? t('anyEvmNetwork') : '—'}
+              {dest?.kind === 'evm'
+                ? destWalletFam === 'SOL'
+                  ? t('anySolNetwork')
+                  : t('anyEvmNetwork')
+                : '—'}
             </div>
           </Field>
         )}
       </div>
 
       {/* Compatibility banner */}
-      {compat.kind === 'ok' && mode !== 'evm-evm' && (
+      {compat.kind === 'ok' && mode !== 'onchain-onchain' && (
         <div className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg border text-accent bg-accent/5 border-accent/25">
           <Check size={12} />
           <span>
-            {mode === 'cex-evm' ? (
+            {mode === 'cex-onchain' ? (
               <>
-                {t('evmCompatible')}:{' '}
+                {destWalletFam === 'SOL' ? t('solCompatible') : t('evmCompatible')}:{' '}
                 <span className="font-medium">
                   {familyLabel(compat.family)}
                 </span>
@@ -652,7 +770,11 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
             <input
               value={amountStr}
               onChange={(e) =>
-                setAmountStr(e.target.value.replace(/[^\d.]/g, ''))
+                setAmountStr(
+                  e.target.value
+                    .replace(/[^\d.]/g, '')
+                    .replace(/(\..*)\./g, '$1')
+                )
               }
               placeholder="0.00"
               className={cn(
@@ -669,7 +791,7 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
           </div>
           <button
             type="button"
-            onClick={() => setAmountStr(String(Math.max(0, maxAmount - fee)))}
+            onClick={() => setAmountStr(String(maxAmount))}
             className="h-11 px-3 rounded-btn border border-white/[0.08] text-xs font-semibold text-fg-muted hover:text-fg hover:bg-white/[0.04] transition-colors"
           >
             MAX
@@ -768,6 +890,7 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
           dest={dest}
           coin={coin}
           amount={amount}
+          amountStr={amountStr}
           fee={fee}
           address={selectedAddrEntry.address}
           tag={selectedAddrEntry.tag}
@@ -782,6 +905,7 @@ export function ActionPanel({ source, sources, onRefresh }: Props) {
           onSubmitted={() => {
             setConfirmOpen(false)
             setAmountStr('')
+            if (onRefresh) Promise.resolve(onRefresh()).catch(() => undefined)
           }}
         />
       )}
@@ -866,15 +990,7 @@ function AddressRow({
   onSelect: () => void
 }) {
   const { t } = useI18n()
-  const [copied, setCopied] = useState(false)
   const valid = family ? isValidAddress(family, entry.address) : null
-
-  const copy = async (e: React.MouseEvent) => {
-    e.stopPropagation()
-    await navigator.clipboard.writeText(entry.address)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1200)
-  }
 
   const Wrapper: React.ElementType = selectable ? 'button' : 'div'
   const hint = family ? addressFormatHint(family) : null
@@ -926,17 +1042,12 @@ function AddressRow({
             tag: <span className="text-fg">{entry.tag}</span>
           </span>
         )}
-        <button
-          type="button"
-          onClick={copy}
-          className="text-fg-muted hover:text-fg transition-colors shrink-0"
-          title={copied ? t('copied') : t('copy')}
-        >
-          <Copy size={13} />
-        </button>
-        {copied && (
-          <span className="text-[10px] text-accent shrink-0">{t('copied')}</span>
-        )}
+        <CopyButton
+          value={entry.address}
+          size={13}
+          title={t('copy')}
+          className="shrink-0"
+        />
       </Wrapper>
       {valid === false && hint && (
         <div className="text-[10px] text-danger pl-3 flex items-center gap-1.5">
@@ -1017,11 +1128,11 @@ function disabledReason(args: {
   if (source.kind === 'cex' && !withdrawInfo)
     return t('pickWithdrawNet')
   if (source.kind === 'evm' && !withdrawNet) return t('pickSourceChain')
-  if ((mode === 'cex-cex' || mode === 'evm-cex') && !depositInfo)
+  if ((mode === 'cex-cex' || mode === 'onchain-cex') && !depositInfo)
     return t('pickDepositNet')
   if (compat.kind === 'bad') return compat.reason ?? t('networksNoMatch')
   if (!selectedAddrEntry) return t('waitingDepositAddr')
-  if (addressOk === false) return t('destAddrInvalid')
+  if (addressOk !== true) return t('destAddrInvalid')
   if (amount <= 0) return t('enterAmount')
   if (amount > maxAmount) return t('exceedsAvailableMax').replace('{max}', String(maxAmount))
   if (withdrawInfo && amount < (withdrawInfo.minWithdraw ?? 0))
@@ -1119,7 +1230,7 @@ function TransferRow({
       <div className="text-[11px] text-fg-muted">
         {t('internalTransfer')} · {t('withdrawFrom')}{' '}
         <span className="uppercase text-fg">{withdrawType}</span> {t('only')}.{' '}
-        <span className="font-mono text-fg">
+        <span className="font-mono font-tnum text-fg">
           {totalCex.toLocaleString('en-US', { maximumFractionDigits: 6 })}{' '}
           {coin}
         </span>{' '}
@@ -1163,7 +1274,7 @@ function TransferRow({
             }
             placeholder="0.00"
             inputMode="decimal"
-            className="w-full h-8 rounded-btn px-3 pr-12 bg-white/[0.04] border border-white/[0.08] font-mono text-[12px] text-fg placeholder:text-fg-muted/40 focus:outline-none focus:border-warn/60"
+            className="w-full h-8 rounded-btn px-3 pr-12 bg-white/[0.04] border border-white/[0.08] font-mono font-tnum text-[12px] text-fg placeholder:text-fg-muted/40 focus:outline-none focus:border-warn/60"
           />
           <button
             type="button"
@@ -1251,7 +1362,7 @@ function NetworkPicker({
   onSelect,
   filter,
   highlightFamily,
-  requireEvm,
+  requireFamily,
   coin,
   smartPick,
   side
@@ -1261,7 +1372,9 @@ function NetworkPicker({
   onSelect: (n: string) => void
   filter: (n: NetworkInfo) => boolean
   highlightFamily?: string
-  requireEvm?: boolean
+  /** Wallet family that destination/source must be compatible with.
+   *  'EVM' = any EVM-compatible chain. 'SOL' = Solana only. undefined = no constraint. */
+  requireFamily?: string
   coin: string
   smartPick?: string
   /** 'withdraw' → show fee · eta. 'deposit' → show min deposit · eta. */
@@ -1292,22 +1405,26 @@ function NetworkPicker({
       </div>
     )
   }
-  // Order: EVM-compatible first when requireEvm; within that group, cheapest
-  // first (matches the "smart pick" heuristic). Incompatibles at the bottom.
+  const isCompatibleFamily = (f: string): boolean => {
+    if (!requireFamily) return true
+    return requireFamily === 'EVM' ? isEvmFamily(f) : f === requireFamily
+  }
+  // Order: compatible first; within that group, cheapest first (matches the
+  // "smart pick" heuristic). Incompatibles at the bottom.
   const sorted = [...list].sort((a, b) => {
-    if (requireEvm) {
-      const aEvm = isEvmFamily(networkFamily(a.network)) ? 0 : 1
-      const bEvm = isEvmFamily(networkFamily(b.network)) ? 0 : 1
-      if (aEvm !== bEvm) return aEvm - bEvm
+    if (requireFamily) {
+      const aOk = isCompatibleFamily(networkFamily(a.network)) ? 0 : 1
+      const bOk = isCompatibleFamily(networkFamily(b.network)) ? 0 : 1
+      if (aOk !== bOk) return aOk - bOk
     }
     return smartPickScore(a) - smartPickScore(b)
   })
+  const reqLabel = requireFamily === 'EVM' ? 'EVM-compatible' : familyLabel(requireFamily ?? '')
   return (
     <div className="flex gap-1.5 flex-wrap">
       {sorted.map((n) => {
         const fam = networkFamily(n.network)
-        const isEvm = isEvmFamily(fam)
-        const incompat = !!requireEvm && !isEvm
+        const incompat = !!requireFamily && !isCompatibleFamily(fam)
         const isMatch =
           !incompat && !!highlightFamily && fam === highlightFamily
         const isActive = n.network === selected
@@ -1317,7 +1434,7 @@ function NetworkPicker({
             ? `fee ${formatFee(n.fee, coin)}`
             : formatMinDeposit(n.minDeposit, coin)
         const title = incompat
-          ? `${n.name} · ${familyLabel(fam)} — not EVM-compatible, funds would be lost`
+          ? `${n.name} · ${familyLabel(fam)} — not ${reqLabel}, funds would be lost`
           : `${n.name}${fam ? ` · ${familyLabel(fam)}` : ''} · ${sideInfo} · ~${formatEta(fam)}`
         return (
           <button
@@ -1330,28 +1447,30 @@ function NetworkPicker({
             }}
             title={title}
             className={cn(
-              'rounded-2xl px-3 py-1.5 text-xs font-medium transition-all border inline-flex flex-col items-start gap-0.5 min-w-[88px]',
+              'relative rounded-2xl px-3 py-1.5 text-xs font-medium transition-all border inline-flex flex-col items-start gap-0.5 min-w-[88px]',
               incompat
                 ? 'bg-white/[0.02] border-white/[0.04] text-fg-muted/40 line-through cursor-not-allowed'
                 : isActive
                   ? 'bg-accent/[0.12] border-accent/50 text-accent'
-                  : isMatch
-                    ? 'bg-accent/[0.05] border-accent/30 text-fg hover:bg-accent/[0.1]'
-                    : 'bg-white/[0.03] border-white/[0.08] text-fg-muted hover:text-fg hover:bg-white/[0.06]'
+                  : isSmart
+                    ? 'bg-accent/[0.05] border-accent/40 ring-1 ring-accent/30 text-fg hover:bg-accent/[0.1]'
+                    : isMatch
+                      ? 'bg-accent/[0.05] border-accent/30 text-fg hover:bg-accent/[0.1]'
+                      : 'bg-white/[0.03] border-white/[0.08] text-fg-muted hover:text-fg hover:bg-white/[0.06]'
             )}
           >
-            <span className="inline-flex items-center gap-1 text-[12px] leading-tight">
-              {n.network}
-              {isSmart && (
-                <Sparkles
-                  size={10}
-                  className={cn(
-                    'opacity-80',
-                    isActive ? 'text-accent' : 'text-accent/80'
-                  )}
-                />
-              )}
-            </span>
+            {isSmart && !incompat && (
+              <span
+                className={cn(
+                  'absolute -top-1.5 -right-1.5 inline-flex items-center gap-0.5 px-1 h-3.5 rounded-full text-[8px] font-bold tracking-wider uppercase border',
+                  'bg-accent text-on-accent border-accent shadow-cta'
+                )}
+              >
+                <Sparkles size={8} />
+                Best
+              </span>
+            )}
+            <span className="text-[12px] leading-tight">{n.network}</span>
             {!incompat && (
               <span className="font-mono font-tnum text-[10px] text-fg-muted/80 leading-tight">
                 {sideInfo} · {formatEta(fam)}

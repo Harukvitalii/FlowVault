@@ -7,8 +7,8 @@ type Status = Record<string, { latencyMs: number | null; error?: string }>
 
 function bucket(latency: number | null): 'good' | 'mid' | 'bad' {
   if (latency == null) return 'bad'
-  if (latency < 100) return 'good'
-  if (latency < 300) return 'mid'
+  if (latency < 400) return 'good'
+  if (latency < 1000) return 'mid'
   return 'bad'
 }
 
@@ -24,23 +24,32 @@ export function RpcTicker() {
     window.api.rpc.list().then(setRpcs).catch(() => undefined)
   }, [])
 
-  const pingAll = async (list: RpcEntry[]) => {
-    if (list.length === 0) return
-    const results = await window.api.rpc.pingMany(
-      list.map((r) => ({ id: r.id, url: r.url }))
-    )
-    const next: Status = {}
-    for (const r of results)
-      next[r.id] = { latencyMs: r.latencyMs, error: r.error }
-    setStatus(next)
-  }
-
+  // Latencies are produced exclusively by the main-process background pinger
+  // (see src/main/rpc.ts startBackgroundPinger). We subscribe to the push
+  // channel and seed from latest() on mount; never ping from the renderer.
   useEffect(() => {
-    if (rpcs.length === 0) return
-    pingAll(rpcs)
-    const t = setInterval(() => pingAll(rpcs), 30_000)
-    return () => clearInterval(t)
-  }, [rpcs])
+    let cancelled = false
+    window.api.rpc
+      .latest()
+      .then((snap) => {
+        if (cancelled) return
+        const next: Status = {}
+        for (const [id, v] of Object.entries(snap))
+          next[id] = { latencyMs: v.latencyMs }
+        setStatus(next)
+      })
+      .catch(() => undefined)
+    const off = window.api.rpc.onLatencies((snap) => {
+      const next: Status = {}
+      for (const [id, v] of Object.entries(snap))
+        next[id] = { latencyMs: v.latencyMs }
+      setStatus(next)
+    })
+    return () => {
+      cancelled = true
+      off()
+    }
+  }, [])
 
   const chains = useMemo(() => {
     const byChainId: Record<number, RpcEntry[]> = {}

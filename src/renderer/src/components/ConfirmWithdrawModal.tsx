@@ -20,12 +20,16 @@ import { formatEta } from '@shared/eta'
 import { cn } from '../lib/cn'
 import { useI18n } from '../lib/i18n'
 import { Button } from './ui'
+import { useToast } from './Toaster'
 
 type Props = {
   source: Source
   dest: Source
   coin: string
   amount: number
+  /** Exact decimal string from the user (preserves precision; `amount` is
+   *  for display/arithmetic only). */
+  amountStr: string
   fee: number
   address: string
   tag?: string
@@ -56,6 +60,7 @@ export function ConfirmWithdrawModal(props: Props) {
     dest,
     coin,
     amount,
+    amountStr,
     fee,
     address,
     tag,
@@ -66,20 +71,28 @@ export function ConfirmWithdrawModal(props: Props) {
     onSubmitted
   } = props
 
+  const toast = useToast()
   const [ack, setAck] = useState(false)
   const [preflight, setPreflight] = useState<PreflightState>({ kind: 'idle' })
   const [submit, setSubmit] = useState<SubmitState>({ kind: 'idle' })
   const [skipPreflight, setSkipPreflight] = useState(false)
   const submitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Idempotency token — generated once per modal-open and sent with every
+  // submit attempt. Main-side dedupe rejects identical retries within a TTL,
+  // so a double-click (or a fast accidental retry) cannot double-charge.
+  const submitId = useMemo(() => crypto.randomUUID(), [])
 
   // Check if preflight is disabled in settings.
   useEffect(() => {
-    window.api.prefs.get().then((p) => {
-      if (p.skipPreflight) {
-        setSkipPreflight(true)
-        setPreflight({ kind: 'done', result: { ok: true, checks: [] } })
-      }
-    })
+    window.api.prefs
+      .get()
+      .then((p) => {
+        if (p.skipPreflight) {
+          setSkipPreflight(true)
+          setPreflight({ kind: 'done', result: { ok: true, checks: [] } })
+        }
+      })
+      .catch(() => undefined)
   }, [])
 
   // Cleanup timeout on unmount to avoid state updates on unmounted component.
@@ -93,37 +106,52 @@ export function ConfirmWithdrawModal(props: Props) {
 
   const runPreflight = async () => {
     setPreflight({ kind: 'running' })
-    if (source.kind === 'cex') {
-      const r = await window.api.exchanges.preflight({
-        accountId: source.id,
-        coin,
-        network,
-        amount,
-        address,
-        tag
-      })
-      setPreflight({ kind: 'done', result: r })
-    } else if (source.kind === 'evm' && chainId) {
-      const r = await window.api.evm.preflight({
-        walletId: source.id,
-        coin,
-        amount,
-        chainId,
-        toAddress: address
-      })
-      setPreflight({ kind: 'done', result: r })
-    } else {
+    try {
+      if (source.kind === 'cex') {
+        const r = await window.api.exchanges.preflight({
+          accountId: source.id,
+          coin,
+          network,
+          amount,
+          address,
+          tag
+        })
+        setPreflight({ kind: 'done', result: r })
+      } else if (source.kind === 'evm' && source.network === 'SOL') {
+        // No on-chain preflight for Solana yet — accept and rely on RPC errors
+        // surfacing during send. Address format is already validated upstream.
+        setPreflight({ kind: 'done', result: { ok: true, checks: [] } })
+      } else if (source.kind === 'evm' && chainId) {
+        const r = await window.api.evm.preflight({
+          walletId: source.id,
+          coin,
+          amount,
+          chainId,
+          toAddress: address
+        })
+        setPreflight({ kind: 'done', result: r })
+      } else {
+        setPreflight({
+          kind: 'done',
+          result: {
+            ok: false,
+            checks: [
+              {
+                label: 'Chain id',
+                status: 'fail',
+                detail: 'missing chain id for EVM send'
+              }
+            ]
+          }
+        })
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'preflight failed'
       setPreflight({
         kind: 'done',
         result: {
           ok: false,
-          checks: [
-            {
-              label: 'Chain id',
-              status: 'fail',
-              detail: 'missing chain id for EVM send'
-            }
-          ]
+          checks: [{ label: 'Preflight', status: 'fail', detail: message }]
         }
       })
     }
@@ -143,49 +171,68 @@ export function ConfirmWithdrawModal(props: Props) {
   const doSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setSubmit({ kind: 'submitting' })
+    try {
+    // No success toast on send — the modal already confirms the action and
+    // the Activity feed shows progress. We only toast on the deposit-credit
+    // event (DepositToastWatcher in App.tsx) and on failure here.
+    const success = (txHash?: string, recordId?: string) => {
+      setSubmit({ kind: 'ok', txHash, recordId })
+      submitTimerRef.current = setTimeout(onSubmitted, txHash ? 1500 : 1200)
+    }
+    const failure = (message: string, hint?: string) => {
+      setSubmit({ kind: 'error', message, hint })
+      toast.push({ kind: 'error', title: 'Withdraw failed', description: hint ?? message })
+    }
     if (source.kind === 'cex') {
       const r = await window.api.exchanges.withdraw({
         accountId: source.id,
         coin,
         network,
         amount,
+        amountStr,
         address,
         tag,
-        destLabel: dest.name
+        destLabel: dest.name,
+        submitId
       })
-      if (r.ok) {
-        setSubmit({ kind: 'ok', recordId: r.recordId })
-        submitTimerRef.current = setTimeout(onSubmitted, 1200)
-      } else {
-        setSubmit({
-          kind: 'error',
-          message: r.error ?? 'Unknown error',
-          hint: r.hint
-        })
-      }
+      if (r.ok) success(undefined, r.recordId)
+      else failure(r.error ?? 'Unknown error', r.hint)
+    } else if (source.kind === 'evm' && source.network === 'SOL') {
+      const r = await window.api.solana.send({
+        walletId: source.id,
+        coin,
+        amount,
+        amountStr,
+        toAddress: address,
+        destLabel: dest.name,
+        submitId
+      })
+      if (r.ok) success(r.txHash, r.recordId)
+      else failure(r.error ?? 'Unknown error')
     } else if (source.kind === 'evm' && chainId) {
       const r = await window.api.evm.submit({
         walletId: source.id,
         coin,
         amount,
+        amountStr,
         chainId,
         toAddress: address,
         destCexAccountId: dest.kind === 'cex' ? dest.id : undefined,
-        destLabel: dest.name
+        destLabel: dest.name,
+        submitId
       })
-      if (r.ok) {
-        setSubmit({ kind: 'ok', txHash: r.txHash, recordId: r.recordId })
-        submitTimerRef.current = setTimeout(onSubmitted, 1500)
-      } else {
-        setSubmit({
-          kind: 'error',
-          message: r.error ?? 'Unknown error'
-        })
-      }
+      if (r.ok) success(r.txHash, r.recordId)
+      else failure(r.error ?? 'Unknown error')
     } else {
       setSubmit({
         kind: 'error',
         message: t('evmSendNoChainId')
+      })
+    }
+    } catch (err) {
+      setSubmit({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Submit failed'
       })
     }
   }

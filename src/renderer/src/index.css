@@ -40,7 +40,11 @@ textarea {
   -webkit-app-region: no-drag;
 }
 
-/* Ambient background blobs */
+/* Ambient background blobs.
+   Three layered radials:
+     1. Top-left accent fade — primary mood lighting from the corner.
+     2. Top-center subtle wash — softens the titlebar boundary.
+     3. Bottom-right cool teal — keeps the lower half from feeling flat. */
 .bg-ambient {
   position: fixed;
   inset: 0;
@@ -49,9 +53,19 @@ textarea {
   pointer-events: none;
   background:
     radial-gradient(
+      ellipse 70rem 50rem at 0% 0%,
+      rgba(16, 185, 129, 0.18),
+      transparent 60%
+    ),
+    radial-gradient(
       ellipse 60rem 22rem at 50% -8%,
-      rgba(16, 185, 129, 0.14),
+      rgba(16, 185, 129, 0.10),
       transparent 70%
+    ),
+    radial-gradient(
+      ellipse 50rem 40rem at 100% 100%,
+      rgba(20, 184, 166, 0.10),
+      transparent 65%
     );
 }
 .bg-ambient::before,

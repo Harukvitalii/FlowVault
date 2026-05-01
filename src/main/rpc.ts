@@ -1,3 +1,4 @@
+import { BrowserWindow } from 'electron'
 import { KNOWN_CHAINS } from '../shared/chains'
 import { listRpcs } from './vault'
 import type { ChainDetectResult, RpcEntry, RpcPingResult } from '../shared/types'
@@ -30,8 +31,42 @@ async function jsonRpc<T>(
   }
 }
 
+/**
+ * Reject loopback / RFC-1918 / link-local / unique-local hosts so a
+ * compromised renderer cannot turn the main process into an HTTP relay
+ * to internal LAN services. Hostnames are accepted (resolution happens
+ * inside fetch); only literal private IPs are blocked here.
+ */
+function isPrivateHost(host: string): boolean {
+  const h = host.replace(/^\[|\]$/g, '').toLowerCase()
+  if (h === 'localhost' || h === '0.0.0.0' || h === '::' || h === '::1') return true
+  const v4 = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (v4) {
+    const a = Number(v4[1])
+    const b = Number(v4[2])
+    if (a === 10) return true                        // 10.0.0.0/8
+    if (a === 127) return true                       // 127.0.0.0/8 loopback
+    if (a === 169 && b === 254) return true          // 169.254.0.0/16 link-local
+    if (a === 172 && b >= 16 && b <= 31) return true // 172.16.0.0/12
+    if (a === 192 && b === 168) return true          // 192.168.0.0/16
+    if (a >= 224) return true                        // multicast / reserved
+    return false
+  }
+  if (/^fc[0-9a-f]{2}:/i.test(h) || /^fd[0-9a-f]{2}:/i.test(h)) return true   // IPv6 ULA fc00::/7
+  if (/^fe[89ab][0-9a-f]:/i.test(h)) return true                              // IPv6 link-local fe80::/10
+  return false
+}
+
 function isValidRpcUrl(url: string): boolean {
-  return /^https?:\/\//i.test(url)
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return false
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false
+  if (isPrivateHost(parsed.hostname)) return false
+  return true
 }
 
 export async function pingRpc(id: string, url: string): Promise<RpcPingResult> {
@@ -105,9 +140,24 @@ async function runBackgroundPing() {
     const rpcs = listRpcs()
     if (rpcs.length === 0) return
     await pingMany(rpcs.map((r) => ({ id: r.id, url: r.url })))
+    broadcastLatencies()
   } catch {
     // Vault may be locked — silently skip.
   }
+}
+
+function broadcastLatencies(): void {
+  const snapshot = latestLatencies()
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send('rpc:latencies', snapshot)
+  }
+}
+
+/** Trigger an immediate ping round (e.g. for a manual Refresh button) and
+ *  push results to all renderers. Coalesces into the same broadcast channel
+ *  used by the periodic background pinger. */
+export async function refreshLatenciesNow(): Promise<void> {
+  await runBackgroundPing()
 }
 
 export function startBackgroundPinger() {

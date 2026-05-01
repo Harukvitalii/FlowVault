@@ -14,6 +14,7 @@ import { Button, Input, Row } from './ui'
 import { cn } from '../lib/cn'
 import { EXCHANGE_META } from '../data/sources'
 import { needsPassphrase } from '@shared/exchanges'
+import { sanitizeAddressInput } from '@shared/addresses'
 import type {
   ConnectionTestResult,
   ExchangeAccountMeta,
@@ -385,9 +386,9 @@ function ExchangeForm({
       accountId,
       exchange,
       label,
-      apiKey,
-      secret,
-      passphrase: requiresPassphrase ? passphrase : undefined
+      apiKey: sanitizeAddressInput(apiKey),
+      secret: sanitizeAddressInput(secret),
+      passphrase: requiresPassphrase ? sanitizeAddressInput(passphrase) : undefined
     })
     setBusy(false)
     if (!r.ok) setError(r.error ?? 'Failed')

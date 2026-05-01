@@ -18,6 +18,10 @@
   <img src="https://img.shields.io/badge/license-private-blue" alt="License" />
 </p>
 
+<p align="center">
+  <img src="docs/demo.gif" alt="FlowVault demo" width="900" />
+</p>
+
 ---
 
 ## What it does

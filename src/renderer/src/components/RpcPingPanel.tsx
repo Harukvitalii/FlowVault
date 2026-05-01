@@ -26,7 +26,33 @@ export function RpcPingPanel() {
   const [pinging, setPinging] = useState(false)
 
   useEffect(() => {
-    window.api.rpc.list().then(setRpcs)
+    window.api.rpc.list().then(setRpcs).catch(() => undefined)
+  }, [])
+
+  // Subscribe to latency push from main; seed from latest() on mount.
+  useEffect(() => {
+    let cancelled = false
+    window.api.rpc
+      .latest()
+      .then((snap) => {
+        if (cancelled) return
+        const next: Status = {}
+        for (const [id, v] of Object.entries(snap))
+          next[id] = { latencyMs: v.latencyMs }
+        setStatus(next)
+      })
+      .catch(() => undefined)
+    const off = window.api.rpc.onLatencies((snap) => {
+      const next: Status = {}
+      for (const [id, v] of Object.entries(snap))
+        next[id] = { latencyMs: v.latencyMs }
+      setStatus(next)
+      setPinging(false)
+    })
+    return () => {
+      cancelled = true
+      off()
+    }
   }, [])
 
   const chains = useMemo(() => {
@@ -60,26 +86,16 @@ export function RpcPingPanel() {
       })
   }, [rpcs, status])
 
+  // Manual refresh — kicks the main-process pinger; results arrive via
+  // the onLatencies subscription above.
   const pingAll = async () => {
-    if (rpcs.length === 0) return
     setPinging(true)
-    const results = await window.api.rpc.pingMany(
-      rpcs.map((r) => ({ id: r.id, url: r.url }))
-    )
-    const next: Status = {}
-    for (const r of results)
-      next[r.id] = { latencyMs: r.latencyMs, error: r.error }
-    setStatus(next)
-    setPinging(false)
+    try {
+      await window.api.rpc.refresh()
+    } catch {
+      setPinging(false)
+    }
   }
-
-  useEffect(() => {
-    if (rpcs.length === 0) return
-    pingAll()
-    const t = setInterval(pingAll, 30_000)
-    return () => clearInterval(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rpcs])
 
   if (rpcs.length === 0) return null
 

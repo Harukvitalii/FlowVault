@@ -27,6 +27,7 @@ import {
   update as updateWithdrawal
 } from './withdrawals'
 import { findCexDepositByTx } from './exchanges'
+import { mask } from './log'
 import type {
   EvmSendInput,
   EvmSubmitResult,
@@ -119,9 +120,15 @@ function buildPlan(
   const tok = findToken(input.chainId, input.coin)
   if (!tok) throw new Error(`coin ${input.coin} not on ${chainTokens.short}`)
 
-  // Use toFixed to avoid floating-point representation artifacts like
-  // 0.30000000000000004 that would cause parseUnits to produce wrong values.
-  const amountStr = typeof input.amount === 'string' ? input.amount : input.amount.toFixed(18)
+  // Prefer the user's exact decimal string from the renderer. Falling back
+  // to .toFixed(18) on a JS number can introduce ghost digits like
+  // 0.30000000000000004 that would shift the value in parseUnits.
+  const amountStr =
+    typeof input.amountStr === 'string' && input.amountStr
+      ? input.amountStr
+      : typeof input.amount === 'string'
+        ? input.amount
+        : input.amount.toFixed(18)
 
   if (tok === 'native') {
     const value = parseUnits(amountStr, 18)
@@ -385,7 +392,7 @@ export async function submitEvmSend(
       chainTxHash: hash
     })
     console.log(
-      `[evm-send] ${plan.chainId} ${plan.displayAmount} → ${plan.toAddress} · tx ${hash}`
+      `[evm-send] chain ${plan.chainId} → ${mask(plan.toAddress)} · tx ${mask(hash, 10, 8)}`
     )
     return { ok: true, txHash: hash, chainId: plan.chainId, recordId: record.id }
   } catch (err) {
@@ -404,6 +411,27 @@ export async function submitEvmSend(
  * destination is a known CEX account, additionally checks whether the
  * exchange has already credited the deposit so the record can flip to 'ok'.
  */
+/**
+ * Per-chain confirmation depth required before a record flips to 'ok'.
+ * L1 ETH (12s blocks) → 3 confs ≈ 36s. L2s have ~1-2s blocks but reorg
+ * finality varies; pick conservative defaults.
+ */
+const MIN_CONFIRMATIONS: Record<number, number> = {
+  1: 3,        // Ethereum mainnet
+  10: 5,       // Optimism
+  56: 5,       // BSC
+  137: 30,     // Polygon (fast blocks, deeper finality needed)
+  8453: 5,     // Base
+  42161: 5,    // Arbitrum One
+  43114: 3,    // Avalanche C-Chain
+  324: 5,      // zkSync Era
+  59144: 5,    // Linea
+  534352: 5,   // Scroll
+  5000: 5,     // Mantle
+  204: 5       // opBNB
+}
+const DEFAULT_MIN_CONFIRMATIONS = 5
+
 export async function checkEvmStatus(rec: WithdrawRecord): Promise<{
   status: WithdrawStatus
   chainTxHash?: string
@@ -425,9 +453,10 @@ export async function checkEvmStatus(rec: WithdrawRecord): Promise<{
         error: 'transaction reverted on-chain'
       }
     }
-    // Success on-chain. If destination is a known CEX account, see if the
-    // deposit has landed there — lets us distinguish "waiting for exchange
-    // to credit" from "fully done".
+    // For CEX destinations, the exchange's own credit decision is the
+    // strongest signal (they only credit after their internal conf depth).
+    // Check that first so we don't make the user wait for our conservative
+    // MIN_CONFIRMATIONS on top of the CEX's wait.
     if (rec.destCexAccountId) {
       const credited = await findCexDepositByTx(
         rec.destCexAccountId,
@@ -437,11 +466,17 @@ export async function checkEvmStatus(rec: WithdrawRecord): Promise<{
       if (credited === 'ok') return { status: 'ok', chainTxHash: hash }
       if (credited === 'processing')
         return { status: 'processing', chainTxHash: hash }
-      // null → CEX hasn't picked it up yet; stay in 'processing'.
+      // CEX hasn't picked it up yet — fall through to confirmation count.
+    }
+    // No CEX side (wallet → wallet) or CEX hasn't seen it: require N
+    // on-chain confirmations before flipping to 'ok' to guard against reorgs.
+    const minConfs =
+      MIN_CONFIRMATIONS[rec.chainId] ?? DEFAULT_MIN_CONFIRMATIONS
+    const head = await publicClient.getBlockNumber()
+    const confs = head >= receipt.blockNumber ? head - receipt.blockNumber : 0n
+    if (confs < BigInt(minConfs)) {
       return { status: 'processing', chainTxHash: hash }
     }
-    // No downstream CEX tracking — on-chain success is "done" for our
-    // purposes (EVM→EVM or a legacy record without dest tracking).
     return { status: 'ok', chainTxHash: hash }
   } catch {
     // Receipt not mined yet.

@@ -14,6 +14,7 @@ import { GlassCard } from './GlassCard'
 import { Button, Input } from './ui'
 import { cn } from '../lib/cn'
 import { familyLabel, isEvmFamily } from '@shared/networks'
+import { shortAddr } from '@shared/format'
 import { EXCHANGE_META } from '../data/sources'
 import type {
   CoinNetworkPair,
@@ -78,11 +79,6 @@ type DepFetchState =
   | { kind: 'loading' }
   | { kind: 'ok'; addresses: WhitelistDepositAddress[] }
   | { kind: 'error'; message: string }
-
-function shortAddr(addr: string): string {
-  if (addr.length <= 14) return addr
-  return `${addr.slice(0, 8)}…${addr.slice(-6)}`
-}
 
 function pairKey(p: CoinNetworkPair): string {
   return `${p.coin}::${p.family}`

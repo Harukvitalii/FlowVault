@@ -138,10 +138,17 @@ export interface WithdrawInput {
   coin: string
   network: string
   amount: number
+  /** User's exact decimal string. Preferred over `amount` for chain-side
+   *  base-unit conversion (avoids float precision loss). */
+  amountStr?: string
   address: string
   tag?: string
   /** Human label of the destination (exchange label or wallet name). */
   destLabel?: string
+  /** Idempotency token from the renderer (UUID per Review modal-open).
+   *  Main rejects duplicates within a short TTL so a double-click cannot
+   *  double-charge. */
+  submitId?: string
 }
 
 export type WithdrawStatus =
@@ -224,6 +231,8 @@ export interface EvmSendInput {
   walletId: string
   coin: string
   amount: number
+  /** User's exact decimal string. Preferred over `amount` for parseUnits. */
+  amountStr?: string
   chainId: number
   toAddress: string
   /** When sending to a known CEX account, pass its id so the poller can
@@ -231,6 +240,8 @@ export interface EvmSendInput {
   destCexAccountId?: string
   /** Human label of the destination (exchange label or wallet name). */
   destLabel?: string
+  /** Idempotency token (UUID per Review modal-open). */
+  submitId?: string
 }
 
 export interface EvmSubmitResult {
@@ -381,7 +392,10 @@ export interface Api {
       toAddress: string
       coin: string
       amount: number
-    }) => Promise<{ ok: boolean; txHash?: string; error?: string }>
+      amountStr?: string
+      destLabel?: string
+      submitId?: string
+    }) => Promise<{ ok: boolean; txHash?: string; recordId?: string; error?: string }>
   }
   rpc: {
     list: () => Promise<RpcEntry[]>
@@ -391,6 +405,16 @@ export interface Api {
     pingMany: (
       entries: { id: string; url: string }[]
     ) => Promise<RpcPingResult[]>
+    /** Snapshot of latest latencies known to main (populated by the
+     *  background pinger). Use to seed UI on mount. */
+    latest: () => Promise<Record<string, { latencyMs: number | null; ts: number }>>
+    /** Trigger an immediate ping round; results are pushed via onLatencies. */
+    refresh: () => Promise<void>
+    /** Subscribe to latency updates pushed by the main process. Returns an
+     *  unsubscribe function. */
+    onLatencies: (
+      cb: (snapshot: Record<string, { latencyMs: number | null; ts: number }>) => void
+    ) => () => void
   }
   prefs: {
     get: () => Promise<UserPrefs>

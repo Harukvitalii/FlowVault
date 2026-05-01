@@ -1,26 +1,23 @@
 import { useEffect, useMemo, useState } from 'react'
+import { List, type RowComponentProps } from 'react-window'
 import {
   AlertTriangle,
   ArrowDownLeft,
   Check,
   ChevronDown,
   ChevronRight,
-  Copy,
   ExternalLink,
   Loader2,
   Trash2
 } from 'lucide-react'
 import type { DepositRecord, WithdrawRecord, WithdrawStatus } from '@shared/types'
 import { familyLabel, networkFamily } from '@shared/networks'
+import { shortAddr } from '@shared/format'
 import { GlassCard } from './GlassCard'
 import { Button } from './ui'
+import { CopyButton } from './CopyButton'
 import { cn } from '../lib/cn'
 import { useI18n } from '../lib/i18n'
-
-function short(s: string, head = 8, tail = 6): string {
-  if (s.length <= head + tail + 1) return s
-  return `${s.slice(0, head)}…${s.slice(-tail)}`
-}
 
 function ago(ts: number, now: number, t: (key: string) => string): string {
   const s = Math.max(0, Math.round((now - ts) / 1000))
@@ -41,6 +38,34 @@ type ActivityItem =
   | { type: 'withdraw'; record: WithdrawRecord; ts: number }
   | { type: 'deposit'; record: DepositRecord; ts: number }
 
+const ROW_HEIGHT = 88
+const VIRTUALIZE_THRESHOLD = 30
+const MAX_LIST_PX = 600
+
+type ActivityRowProps = { items: ActivityItem[]; now: number }
+
+function ActivityRow({
+  index,
+  style,
+  items,
+  now
+}: RowComponentProps<ActivityRowProps>) {
+  const it = items[index]
+  if (!it) return null
+  return (
+    <div
+      style={style}
+      className="border-b border-white/[0.05] overflow-hidden"
+    >
+      {it.type === 'withdraw' ? (
+        <Row record={it.record} now={now} />
+      ) : (
+        <DepositRow record={it.record} now={now} />
+      )}
+    </div>
+  )
+}
+
 export function ActivityPanel() {
   const { t } = useI18n()
   const [withdrawals, setWithdrawals] = useState<WithdrawRecord[] | null>(null)
@@ -49,17 +74,50 @@ export function ActivityPanel() {
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
-    window.api.withdrawals.list().then(setWithdrawals)
+    // Subscribe first so any push that fires while list() is in flight is
+    // captured; mark `live` so the late list() resolution doesn't overwrite
+    // a fresher snapshot from the push channel.
+    let cancelled = false
+    let live = false
+    const sortDesc = (rs: WithdrawRecord[]) =>
+      rs.slice().sort((a, b) => b.submittedAt - a.submittedAt)
     const unsub = window.api.withdrawals.onUpdate((next) => {
-      setWithdrawals(next.slice().sort((a, b) => b.submittedAt - a.submittedAt))
+      if (cancelled) return
+      live = true
+      setWithdrawals(sortDesc(next))
     })
-    return unsub
+    window.api.withdrawals
+      .list()
+      .then((data) => {
+        if (cancelled || live) return
+        setWithdrawals(sortDesc(data))
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+      unsub()
+    }
   }, [])
 
   useEffect(() => {
-    window.api.deposits.list().then(setDeposits)
-    const unsub = window.api.deposits.onUpdate(setDeposits)
-    return unsub
+    let cancelled = false
+    let live = false
+    const unsub = window.api.deposits.onUpdate((next) => {
+      if (cancelled) return
+      live = true
+      setDeposits(next)
+    })
+    window.api.deposits
+      .list()
+      .then((data) => {
+        if (cancelled || live) return
+        setDeposits(data)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+      unsub()
+    }
   }, [])
 
   useEffect(() => {
@@ -130,15 +188,31 @@ export function ActivityPanel() {
       </div>
 
       {!collapsed && (
-        <GlassCard className="divide-y divide-white/[0.05]">
-          {items.map((it) =>
-            it.type === 'withdraw' ? (
-              <Row key={it.record.id} record={it.record} now={now} />
-            ) : (
-              <DepositRow key={it.record.id} record={it.record} now={now} />
-            )
-          )}
-        </GlassCard>
+        items.length <= VIRTUALIZE_THRESHOLD ? (
+          <GlassCard className="divide-y divide-white/[0.05]">
+            {items.map((it) =>
+              it.type === 'withdraw' ? (
+                <Row key={it.record.id} record={it.record} now={now} />
+              ) : (
+                <DepositRow key={it.record.id} record={it.record} now={now} />
+              )
+            )}
+          </GlassCard>
+        ) : (
+          // Virtualized for long histories — only the rows in the viewport
+          // are mounted, so the 15s `now` tick stops re-rendering 100+ rows.
+          <GlassCard className="p-0 overflow-hidden">
+            <List
+              rowCount={items.length}
+              rowHeight={ROW_HEIGHT}
+              rowComponent={ActivityRow}
+              rowProps={{ items, now }}
+              style={{
+                height: Math.min(items.length * ROW_HEIGHT, MAX_LIST_PX)
+              }}
+            />
+          </GlassCard>
+        )
       )}
     </section>
   )
@@ -146,13 +220,6 @@ export function ActivityPanel() {
 
 function Row({ record, now }: { record: WithdrawRecord; now: number }) {
   const { t } = useI18n()
-  const [copied, setCopied] = useState<string | null>(null)
-  const copy = async (text: string) => {
-    await navigator.clipboard.writeText(text)
-    setCopied(text)
-    setTimeout(() => setCopied(null), 1200)
-  }
-
   const family = networkFamily(record.network)
   const explorer = explorerUrl(record)
 
@@ -166,7 +233,7 @@ function Row({ record, now }: { record: WithdrawRecord; now: number }) {
             {record.coin}
           </span>
           <span className="text-fg-muted text-xs">
-            {record.exchangeLabel} → {record.destLabel ? `${record.destLabel} · ` : ''}{short(record.address, 6, 6)}
+            {record.exchangeLabel} → {record.destLabel ? `${record.destLabel} · ` : ''}{shortAddr(record.address)}
           </span>
           <span className="text-[10px] uppercase tracking-wider text-fg-muted/70">
             {record.network} · {familyLabel(family)}
@@ -176,7 +243,7 @@ function Row({ record, now }: { record: WithdrawRecord; now: number }) {
           <StatusPill status={record.status} />
           <span>{ago(record.updatedAt, now, t)}</span>
           {record.fee > 0 && (
-            <span className="font-mono">· fee {record.fee} {record.coin}</span>
+            <span className="font-mono font-tnum">· fee {record.fee} {record.coin}</span>
           )}
           {record.hint && (
             <span className="text-warn truncate" title={record.hint}>
@@ -193,18 +260,9 @@ function Row({ record, now }: { record: WithdrawRecord; now: number }) {
           )}
         </div>
         {record.chainTxHash && (
-          <div className="flex items-center gap-1.5 text-[11px] font-mono text-fg-muted mt-0.5">
-            tx: {short(record.chainTxHash, 10, 8)}
-            <button
-              onClick={() => copy(record.chainTxHash!)}
-              className="text-fg-muted/70 hover:text-fg transition-colors"
-              title={t('copy')}
-            >
-              <Copy size={11} />
-            </button>
-            {copied === record.chainTxHash && (
-              <span className="text-accent">{t('copied')}</span>
-            )}
+          <div className="flex items-center gap-1.5 text-[11px] font-mono font-tnum text-fg-muted mt-0.5">
+            tx: {shortAddr(record.chainTxHash, 10, 8)}
+            <CopyButton value={record.chainTxHash} size={11} title={t('copy')} />
             {explorer && (
               <a
                 href={explorer}
@@ -212,6 +270,7 @@ function Row({ record, now }: { record: WithdrawRecord; now: number }) {
                 rel="noreferrer"
                 className="text-fg-muted/70 hover:text-fg transition-colors"
                 title={t('viewExplorer')}
+                aria-label={t('viewExplorer')}
               >
                 <ExternalLink size={11} />
               </a>
@@ -220,13 +279,12 @@ function Row({ record, now }: { record: WithdrawRecord; now: number }) {
         )}
       </div>
       <div className="flex items-center gap-1 shrink-0">
-        <button
-          onClick={() => copy(record.address)}
-          className="w-7 h-7 rounded-md text-fg-muted hover:text-fg hover:bg-white/[0.06] inline-flex items-center justify-center"
+        <CopyButton
+          value={record.address}
+          size={12}
           title={t('copyAddress')}
-        >
-          <Copy size={12} />
-        </button>
+          className="w-7 h-7 rounded-md hover:bg-white/[0.06]"
+        />
         <button
           onClick={() => {
             if (record.status === 'submitting' || record.status === 'pending' || record.status === 'processing') return
@@ -259,10 +317,6 @@ function DepositRow({ record, now }: { record: DepositRecord; now: number }) {
     processing: t('deposit.processing'),
     ok: t('deposit.ok')
   }
-  const pillTone =
-    record.status === 'ok'
-      ? 'text-accent border-accent/30 bg-accent/10'
-      : 'text-fg-muted border-white/[0.08] bg-white/[0.03]'
 
   return (
     <div className="px-4 py-3 text-sm grid grid-cols-[auto_1fr] gap-3 items-center border-l-2 border-accent/40">
@@ -287,14 +341,10 @@ function DepositRow({ record, now }: { record: DepositRecord; now: number }) {
           )}
         </div>
         <div className="flex items-center gap-2 text-[11px] text-fg-muted mt-0.5">
-          <span
-            className={cn(
-              'inline-flex items-center h-5 px-1.5 rounded-full text-[10px] uppercase tracking-wider font-semibold border',
-              pillTone
-            )}
-          >
-            {DEPOSIT_LABEL[record.status] ?? record.status}
-          </span>
+          <StatusPill
+            status={record.status}
+            label={DEPOSIT_LABEL[record.status] ?? record.status}
+          />
           <span>{ago(record.depositedAt, now, t)}</span>
         </div>
       </div>
@@ -309,22 +359,44 @@ function StatusIcon({ status }: { status: WithdrawStatus }) {
   return <Loader2 size={14} className="text-fg-muted animate-spin" />
 }
 
-function StatusPill({ status }: { status: WithdrawStatus }) {
+/**
+ * Status palette shared by withdrawals and deposits. In-flight states get a
+ * pulsing amber dot so the eye is drawn to rows that still need attention.
+ *   submitting/pending/processing → amber + pulse
+ *   ok                            → accent green
+ *   failed                        → danger red
+ */
+function StatusPill({
+  status,
+  label
+}: {
+  status: WithdrawStatus | 'pending' | 'processing' | 'ok'
+  /** Override the default i18n withdraw label (e.g. for deposit-side wording). */
+  label?: string
+}) {
   const { t } = useI18n()
+  const inFlight =
+    status === 'submitting' || status === 'pending' || status === 'processing'
   const tone =
     status === 'ok'
       ? 'text-accent border-accent/30 bg-accent/10'
       : status === 'failed'
         ? 'text-danger border-danger/30 bg-danger/10'
-        : 'text-fg-muted border-white/[0.08] bg-white/[0.03]'
+        : 'text-warn border-warn/30 bg-warn/10'
   return (
     <span
       className={cn(
-        'inline-flex items-center h-5 px-1.5 rounded-full text-[10px] uppercase tracking-wider font-semibold border',
+        'inline-flex items-center gap-1 h-5 px-1.5 rounded-full text-[10px] uppercase tracking-wider font-semibold border',
         tone
       )}
     >
-      {statusLabel(status, t)}
+      {inFlight && (
+        <span className="relative inline-flex w-1.5 h-1.5">
+          <span className="absolute inset-0 rounded-full bg-warn animate-ping opacity-70" />
+          <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-warn" />
+        </span>
+      )}
+      {label ?? statusLabel(status as WithdrawStatus, t)}
     </span>
   )
 }

@@ -87,7 +87,15 @@ const api: Api = {
     save: (rpcs) => ipcRenderer.invoke('rpc:save', rpcs),
     detect: (url) => ipcRenderer.invoke('rpc:detect', url),
     ping: (url) => ipcRenderer.invoke('rpc:ping', url),
-    pingMany: (entries) => ipcRenderer.invoke('rpc:pingMany', entries)
+    pingMany: (entries) => ipcRenderer.invoke('rpc:pingMany', entries),
+    latest: () => ipcRenderer.invoke('rpc:latest'),
+    refresh: () => ipcRenderer.invoke('rpc:refresh'),
+    onLatencies: (cb) => {
+      const handler = (_e: unknown, snapshot: unknown) =>
+        cb(snapshot as Parameters<typeof cb>[0])
+      ipcRenderer.on('rpc:latencies', handler)
+      return () => ipcRenderer.removeListener('rpc:latencies', handler)
+    }
   }
 }
 
