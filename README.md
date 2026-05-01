@@ -24,6 +24,17 @@
 
 ---
 
+> [!IMPORTANT]
+> ## READ BEFORE USE
+>
+> - **PRIVATE KEYS AND API SECRETS NEVER LEAVE YOUR MACHINE.** Everything is AES-256-GCM encrypted and stored locally inside the vault. No cloud sync, no remote backup, no telemetry.
+>
+> - **YOU MUST ADD EVERY DESTINATION ADDRESS TO THE EXCHANGE'S WITHDRAWAL WHITELIST MANUALLY.** Each CEX (Binance, Bybit, OKX, etc.) only lets API keys withdraw to addresses you have already approved in their address book / whitelist on the exchange's own website. FlowVault DOES NOT bypass this — it just sends the withdraw request; the exchange enforces the whitelist.
+>
+> - **THE APP CAN ONLY MOVE FUNDS BETWEEN ACCOUNTS YOU PRE-AUTHORIZED.** In practice this means: **EXCHANGE → EXCHANGE** (when the destination's deposit address is whitelisted on the source), and **EXCHANGE → YOUR OWN WALLET** (when that wallet's address is whitelisted). **THE APP CANNOT SEND TO ARBITRARY ADDRESSES THAT YOU HAVE NOT WHITELISTED IN ADVANCE.**
+
+---
+
 ## What it does
 
 FlowVault consolidates multi-exchange crypto management into one interface:
@@ -69,35 +80,6 @@ FlowVault consolidates multi-exchange crypto management into one interface:
 | **File permissions** | Vault, history, and cache files written with `mode 0o600` (owner-only) on POSIX |
 | **Permissions denied** | Renderer denied mic, camera, geolocation, notifications, and all browser permission prompts |
 | **No telemetry** | No analytics, no tracking, no auto-update calls. Outgoing requests are limited to those you initiate (CEX API, EVM/Solana RPC) plus Google Fonts and `api.ipify.org` for public-IP detection on the Setup tab. |
-
-## Architecture
-
-```
-src/
-├── main/                  # Electron main process
-│   ├── vault.ts           # Encrypted vault (keys, credentials, RPCs)
-│   ├── exchanges.ts       # CEX operations via ccxt + custom clients
-│   ├── phemex.ts          # Custom Phemex REST client (HMAC SHA256)
-│   ├── evm-send.ts        # On-chain EVM transfers via viem
-│   ├── evm.ts             # EVM balance queries (multi-chain, multi-RPC)
-│   ├── withdrawals.ts     # Withdrawal records + status poller
-│   ├── deposits.ts        # Deposit monitor (all exchanges)
-│   ├── rpc.ts             # RPC health monitoring + latency routing
-│   ├── cache-store.ts     # Disk cache for network info + deposit addresses
-│   └── prefs.ts           # User preferences
-├── renderer/              # React frontend
-│   ├── pages/
-│   │   ├── Dashboard.tsx  # Source grid + detail takeover view
-│   │   ├── Lock.tsx       # Vault unlock / create
-│   │   └── Settings.tsx   # Exchanges, wallets, RPCs, setup
-│   └── components/
-│       ├── ActionPanel    # Transfer builder (CEX↔CEX, CEX↔EVM, EVM↔EVM)
-│       ├── ActivityPanel  # Unified withdrawal + deposit feed
-│       ├── RpcTicker      # Scrolling RPC latency bar
-│       └── ...
-├── preload/               # Context bridge (IPC only, no Node access)
-└── shared/                # Types, network mappings, address validation
-```
 
 ## Install
 
@@ -167,19 +149,6 @@ npm run build
 3. **Whitelist your IP** — Setup tab shows your public IP and per-exchange instructions
 4. **Add wallets** — import EVM private key (for sending) or add watch-only addresses
 5. **Configure RPCs** — default RPCs are pre-loaded; add custom ones for better latency
-
-### Build for Distribution
-
-```bash
-# macOS (dmg + zip, arm64 + x64)
-npm run build:mac
-
-# Windows (nsis + portable)
-npm run build:win
-
-# Linux (AppImage + deb)
-npm run build:linux
-```
 
 ## Tech Stack
 

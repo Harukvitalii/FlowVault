@@ -1,10 +1,41 @@
 import { app, BrowserWindow, ipcMain, session, shell } from 'electron'
+import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 // ESM build: polyfill CommonJS-style __dirname so `join(__dirname, …)` keeps
 // working after electron-vite emits index.mjs.
 const __dirname = dirname(fileURLToPath(import.meta.url))
+
+// Diagnostic file logger. Window-invisible-on-Windows symptom requires
+// ground-truth evidence the user can copy-paste, since DevTools is gated.
+let diagLogPath: string | null = null
+function diag(line: string): void {
+  const stamped = `[${new Date().toISOString()}] ${line}\n`
+  try {
+    if (!diagLogPath) {
+      const dir = app.getPath('userData')
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+      diagLogPath = join(dir, 'main.log')
+    }
+    appendFileSync(diagLogPath, stamped)
+  } catch {
+    // ignore — logging must never break startup
+  }
+  // Also surface to stdout for `npm run dev`.
+  process.stdout.write(stamped)
+}
+
+process.on('uncaughtException', (err) => {
+  diag(`uncaughtException: ${err?.stack ?? err}`)
+})
+process.on('unhandledRejection', (reason) => {
+  diag(
+    `unhandledRejection: ${
+      reason instanceof Error ? reason.stack : String(reason)
+    }`
+  )
+})
 import {
   addWallet,
   changeMasterKey,
@@ -114,6 +145,7 @@ function obj(v: unknown): Record<string, unknown> {
 let mainWindow: BrowserWindow | null = null
 
 function createWindow() {
+  diag(`createWindow: starting · platform=${process.platform} · isDev=${isDev}`)
   const win = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -150,9 +182,38 @@ function createWindow() {
     })
   }
 
+  let readyToShowFired = false
   win.on('ready-to-show', () => {
+    readyToShowFired = true
+    diag('ready-to-show fired · showing window')
     win.show()
     if (isDev) win.webContents.openDevTools({ mode: 'detach' })
+  })
+
+  // Fallback: if the renderer never reaches ready-to-show within 5s, force
+  // the window visible so the user sees what is broken (blank page, error
+  // chrome, etc.) instead of an invisible process.
+  setTimeout(() => {
+    if (readyToShowFired || win.isDestroyed()) return
+    diag('fallback show triggered after 5s · ready-to-show never fired')
+    try {
+      win.show()
+    } catch (err) {
+      diag(`fallback show threw: ${err instanceof Error ? err.stack : err}`)
+    }
+  }, 5000)
+
+  win.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    diag(`did-fail-load · code=${code} · desc=${desc} · url=${url}`)
+  })
+  win.webContents.on('render-process-gone', (_e, details) => {
+    diag(`render-process-gone · reason=${details.reason} · exitCode=${details.exitCode}`)
+  })
+  win.webContents.on('unresponsive', () => {
+    diag('webContents unresponsive')
+  })
+  win.webContents.on('console-message', (_e, level, message, line, sourceId) => {
+    diag(`renderer console [${level}] ${message} (${sourceId}:${line})`)
   })
 
   win.webContents.setWindowOpenHandler((details) => {
@@ -169,9 +230,17 @@ function createWindow() {
   })
 
   if (isDev) {
-    win.loadURL(process.env['ELECTRON_RENDERER_URL']!)
+    const url = process.env['ELECTRON_RENDERER_URL']!
+    diag(`loadURL · ${url}`)
+    win.loadURL(url).catch((err) => {
+      diag(`loadURL failed: ${err instanceof Error ? err.stack : err}`)
+    })
   } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'))
+    const indexPath = join(__dirname, '../renderer/index.html')
+    diag(`loadFile · path=${indexPath} · exists=${existsSync(indexPath)}`)
+    win.loadFile(indexPath).catch((err) => {
+      diag(`loadFile failed: ${err instanceof Error ? err.stack : err}`)
+    })
   }
 }
 
@@ -187,6 +256,7 @@ app.on('second-instance', () => {
 })
 
 app.whenReady().then(async () => {
+  diag(`app ready · electron=${process.versions.electron} · node=${process.versions.node} · resourcesPath=${process.resourcesPath}`)
   // Defense in depth: deny every renderer permission request (mic, camera,
   // geolocation, notifications, midi, etc.). The app never asks for any.
   session.defaultSession.setPermissionRequestHandler((_w, _p, callback) =>
@@ -472,6 +542,8 @@ app.whenReady().then(async () => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+}).catch((err) => {
+  diag(`whenReady chain rejected: ${err instanceof Error ? err.stack : err}`)
 })
 
 app.on('window-all-closed', () => {
