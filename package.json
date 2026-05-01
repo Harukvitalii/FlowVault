@@ -1,6 +1,6 @@
 {
   "name": "flowvault",
-  "version": "0.1.0",
+  "version": "1.0.0-beta",
   "private": true,
   "description": "Manage withdrawals across CEX exchanges and crypto wallets. Local-first, AES-256-GCM encrypted vault.",
   "license": "MIT",
@@ -10,12 +10,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Harukvitalii/flowvault.git"
+    "url": "https://github.com/Harukvitalii/withdraw_app.git"
   },
   "bugs": {
-    "url": "https://github.com/Harukvitalii/flowvault/issues"
+    "url": "https://github.com/Harukvitalii/withdraw_app/issues"
   },
-  "homepage": "https://github.com/Harukvitalii/flowvault#readme",
+  "homepage": "https://github.com/Harukvitalii/withdraw_app#readme",
   "main": "out/main/index.mjs",
   "scripts": {
     "dev": "electron-vite dev",

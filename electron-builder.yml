@@ -59,4 +59,8 @@ linux:
       arch:
         - x64
 
-publish: null
+publish:
+  provider: github
+  owner: Harukvitalii
+  repo: withdraw_app
+  releaseType: prerelease
