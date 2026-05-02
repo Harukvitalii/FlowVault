@@ -97,6 +97,16 @@ const ALIASES: Record<string, Family> = {
   CFX: 'CFX',
   CONFLUX: 'CFX',
 
+  PLASMA: 'PLASMA',
+
+  HYPEREVM: 'HYPEREVM',
+  HYPERLIQUIDEVM: 'HYPEREVM',
+
+  CORN: 'CORN',
+
+  MONAD: 'MONAD',
+  MON: 'MONAD',
+
   // Fantom (pre-merge)
   FTM: 'FTM',
   FANTOM: 'FTM',
@@ -203,7 +213,11 @@ const EVM_FAMILIES = new Set<Family>([
   'BERA',
   'MANTA',
   'ZETA',
-  'CFX'
+  'CFX',
+  'PLASMA',
+  'HYPEREVM',
+  'CORN',
+  'MONAD'
 ])
 
 function stripNonAlnum(s: string): string {
@@ -273,6 +287,10 @@ const FAMILY_LABELS: Record<Family, string> = {
   MANTA: 'Manta',
   ZETA: 'ZetaChain',
   CFX: 'Conflux',
+  PLASMA: 'Plasma',
+  HYPEREVM: 'HyperEVM',
+  CORN: 'Corn',
+  MONAD: 'Monad',
   XLM: 'Stellar',
   HBAR: 'Hedera',
   DOT: 'Polkadot',
