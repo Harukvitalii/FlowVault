@@ -259,10 +259,15 @@ app.whenReady().then(async () => {
   diag(`app ready · electron=${process.versions.electron} · node=${process.versions.node} · resourcesPath=${process.resourcesPath}`)
   // Defense in depth: deny every renderer permission request (mic, camera,
   // geolocation, notifications, midi, etc.). The app never asks for any.
-  session.defaultSession.setPermissionRequestHandler((_w, _p, callback) =>
-    callback(false)
+  // Exception: clipboard-sanitized-write is needed for the copy buttons
+  // (deposit address, tx hash, …). Read access stays denied.
+  const ALLOWED_PERMS = new Set(['clipboard-sanitized-write'])
+  session.defaultSession.setPermissionRequestHandler((_w, perm, callback) =>
+    callback(ALLOWED_PERMS.has(perm))
   )
-  session.defaultSession.setPermissionCheckHandler(() => false)
+  session.defaultSession.setPermissionCheckHandler((_w, perm) =>
+    ALLOWED_PERMS.has(perm)
+  )
 
   // Load on-disk caches (networks + deposit addresses) so first session-clicks
   // don't hit the network.
