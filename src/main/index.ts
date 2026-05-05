@@ -79,6 +79,7 @@ import {
   warmup
 } from './exchanges'
 import { getPrefs, savePrefs } from './prefs'
+import { applyProxyFromPrefs, checkCurrentIp, testProxy } from './proxy'
 import {
   list as listDeposits,
   setClientGetter,
@@ -272,6 +273,7 @@ app.whenReady().then(async () => {
   // Load on-disk caches (networks + deposit addresses) so first session-clicks
   // don't hit the network.
   await loadFromDisk()
+  applyProxyFromPrefs(await getPrefs())
   startBackgroundPinger()
   setStatusFetcher(async (rec) => {
     if (rec.kind === 'evm') return checkEvmStatus(rec)
@@ -522,7 +524,25 @@ app.whenReady().then(async () => {
 
   // Prefs
   ipcMain.handle('prefs:get', () => getPrefs())
-  ipcMain.handle('prefs:save', (_e, prefs: unknown) => savePrefs(obj(prefs) as unknown as UserPrefs))
+  ipcMain.handle('prefs:save', async (_e, prefs: unknown) => {
+    const r = await savePrefs(obj(prefs) as unknown as UserPrefs)
+    if (r.ok) {
+      applyProxyFromPrefs(await getPrefs())
+      invalidateAllClients()
+    }
+    return r
+  })
+
+  // Proxy
+  ipcMain.handle('proxy:test', (_e, input: unknown) => {
+    const o = obj(input)
+    return testProxy({
+      url: str(o.url),
+      username: typeof o.username === 'string' ? o.username : undefined,
+      password: typeof o.password === 'string' ? o.password : undefined
+    })
+  })
+  ipcMain.handle('proxy:checkIp', () => checkCurrentIp())
 
   // RPC
   ipcMain.handle('rpc:list', () => listRpcs())

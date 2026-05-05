@@ -24,6 +24,12 @@ type DetectState =
   | { kind: 'ok'; ip: string }
   | { kind: 'error'; message: string }
 
+type ProxyIpState =
+  | { kind: 'off' }
+  | { kind: 'loading' }
+  | { kind: 'ok'; ip: string }
+  | { kind: 'error'; message: string }
+
 /** Strict literal-IP check. Accepts IPv4 dotted-quad (each octet 0-255) and
  *  a broad IPv6 shape (hex groups, optional ::). Rejects hostnames, HTML,
  *  whitespace, or any other shape that should never come from the IP API. */
@@ -36,6 +42,7 @@ function isPublicIpLiteral(s: string): boolean {
 
 export function SetupTab() {
   const [ipState, setIpState] = useState<DetectState>({ kind: 'idle' })
+  const [proxyIp, setProxyIp] = useState<ProxyIpState>({ kind: 'off' })
   const [copied, setCopied] = useState(false)
 
   const detect = async () => {
@@ -65,8 +72,26 @@ export function SetupTab() {
     }
   }
 
+  // Proxy IP is fetched from main, where the undici dispatcher actually
+  // routes traffic. Renderer fetch above always sees the local ISP IP
+  // because Chromium has its own network stack.
+  const detectProxyIp = async () => {
+    setProxyIp({ kind: 'loading' })
+    const r = await window.api.proxy.checkIp()
+    if (!r.proxied) {
+      setProxyIp({ kind: 'off' })
+      return
+    }
+    if (r.ok && r.ip && isPublicIpLiteral(r.ip)) {
+      setProxyIp({ kind: 'ok', ip: r.ip })
+    } else {
+      setProxyIp({ kind: 'error', message: r.error ?? 'failed' })
+    }
+  }
+
   useEffect(() => {
     detect()
+    detectProxyIp()
   }, [])
 
   const copy = async () => {
@@ -110,7 +135,10 @@ export function SetupTab() {
           </div>
           <Button
             variant="ghost"
-            onClick={detect}
+            onClick={() => {
+              detect()
+              detectProxyIp()
+            }}
             disabled={ipState.kind === 'loading'}
             className="h-8 px-3 text-xs"
           >
@@ -151,6 +179,25 @@ export function SetupTab() {
             </>
           )}
         </div>
+        {proxyIp.kind !== 'off' && (
+          <div className="flex items-center gap-2 text-[11px]">
+            <span className="text-fg-muted">Through proxy:</span>
+            {proxyIp.kind === 'loading' && (
+              <span className="inline-flex items-center gap-1.5 text-fg-muted">
+                <Loader2 size={11} className="animate-spin" />
+                detecting…
+              </span>
+            )}
+            {proxyIp.kind === 'ok' && (
+              <span className="font-mono text-accent">{proxyIp.ip}</span>
+            )}
+            {proxyIp.kind === 'error' && (
+              <span className="font-mono text-danger">
+                failed · {proxyIp.message}
+              </span>
+            )}
+          </div>
+        )}
         <p className="text-[11px] text-fg-muted leading-relaxed">
           This is the address every exchange will see when the app signs a
           request. Paste it into the IP whitelist fields below.

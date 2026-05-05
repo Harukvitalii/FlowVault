@@ -64,6 +64,13 @@ export interface UserPrefs {
   depositsEnabled?: boolean
   /** When true, skip the preflight dry-run before submitting withdrawals. */
   skipPreflight?: boolean
+  /** Optional HTTP/HTTPS proxy applied as undici global dispatcher. */
+  proxy?: {
+    enabled: boolean
+    url: string
+    username?: string
+    password?: string
+  }
 }
 
 export type DepositStatus = 'pending' | 'processing' | 'ok'
@@ -419,5 +426,23 @@ export interface Api {
   prefs: {
     get: () => Promise<UserPrefs>
     save: (prefs: UserPrefs) => Promise<{ ok: boolean }>
+  }
+  proxy: {
+    test: (input: {
+      url: string
+      username?: string
+      password?: string
+    }) => Promise<{
+      ok: boolean
+      ip?: string
+      latencyMs?: number
+      error?: string
+    }>
+    checkIp: () => Promise<{
+      ok: boolean
+      ip?: string
+      proxied: boolean
+      error?: string
+    }>
   }
 }

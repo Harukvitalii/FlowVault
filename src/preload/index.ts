@@ -82,6 +82,10 @@ const api: Api = {
     get: () => ipcRenderer.invoke('prefs:get'),
     save: (prefs) => ipcRenderer.invoke('prefs:save', prefs)
   },
+  proxy: {
+    test: (input) => ipcRenderer.invoke('proxy:test', input),
+    checkIp: () => ipcRenderer.invoke('proxy:checkIp')
+  },
   rpc: {
     list: () => ipcRenderer.invoke('rpc:list'),
     save: (rpcs) => ipcRenderer.invoke('rpc:save', rpcs),

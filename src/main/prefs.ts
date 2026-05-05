@@ -60,10 +60,27 @@ function sanitize(raw: unknown): UserPrefs {
   }
   const depositsEnabled = (raw as { depositsEnabled?: unknown }).depositsEnabled
   const skipPreflight = (raw as { skipPreflight?: unknown }).skipPreflight
+  const rawProxy = (raw as { proxy?: unknown }).proxy
+  let proxy: UserPrefs['proxy'] | undefined
+  if (rawProxy && typeof rawProxy === 'object') {
+    const p = rawProxy as Record<string, unknown>
+    const url = typeof p.url === 'string' ? p.url : ''
+    const enabled = typeof p.enabled === 'boolean' ? p.enabled : false
+    const validUrl = url.length > 0 && /^https?:\/\//i.test(url)
+    if (validUrl) {
+      proxy = {
+        enabled,
+        url,
+        username: typeof p.username === 'string' ? p.username : undefined,
+        password: typeof p.password === 'string' ? p.password : undefined
+      }
+    }
+  }
   return {
     whitelistSelection: unique,
     depositsEnabled: depositsEnabled === false ? false : undefined,
-    skipPreflight: skipPreflight === true ? true : undefined
+    skipPreflight: skipPreflight === true ? true : undefined,
+    proxy
   }
 }
 

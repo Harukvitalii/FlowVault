@@ -2,6 +2,7 @@ import ccxt, { type Exchange } from 'ccxt'
 import { getExchangeCreds, listExchanges as listExchangeAccounts } from './vault'
 import * as phemexApi from './phemex'
 import { runSignedProbe } from './diag'
+import { getProxyUri } from './proxy'
 import { familyLabel, networkFamily, sameNetworkFamily } from '../shared/networks'
 import {
   addPending as addPendingWithdrawal,
@@ -206,13 +207,22 @@ function build(accountId: string): Exchange {
   if (!creds) throw new Error('account not found (vault locked?)')
   const Ctor = EXCHANGE_CTORS[creds.exchange]
   if (!Ctor) throw new Error(`unsupported exchange: ${creds.exchange}`)
-  return new Ctor({
+  const client = new Ctor({
     apiKey: creds.apiKey,
     secret: creds.secret,
     password: creds.passphrase,
     enableRateLimit: true,
     timeout: 10_000
   })
+  // ccxt's bundled node-fetch bypasses undici's global dispatcher, so the
+  // app-level proxy must be wired into the ccxt client directly. ccxt loads
+  // its own https-proxy-agent on first request when these are set.
+  const proxyUri = getProxyUri()
+  if (proxyUri) {
+    ;(client as unknown as { httpsProxy: string; httpProxy: string }).httpsProxy = proxyUri
+    ;(client as unknown as { httpsProxy: string; httpProxy: string }).httpProxy = proxyUri
+  }
+  return client
 }
 
 export function getClient(accountId: string): Exchange {

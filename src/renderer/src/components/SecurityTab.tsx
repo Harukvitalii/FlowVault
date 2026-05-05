@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react'
-import { AlertTriangle, KeyRound, ShieldOff, Trash2 } from 'lucide-react'
+import { AlertTriangle, Globe, KeyRound, Loader2, ShieldOff, Trash2 } from 'lucide-react'
 import { GlassCard } from './GlassCard'
 import { Button, Input, Row } from './ui'
 import { cn } from '../lib/cn'
@@ -13,10 +13,221 @@ type Props = {
 export function SecurityTab({ onWiped }: Props) {
   return (
     <div className="space-y-4">
+      <ProxySetupCard />
       <SkipPreflightCard />
       <ChangeMasterCard />
       <WipeVaultCard onWiped={onWiped} />
     </div>
+  )
+}
+
+function ProxySetupCard() {
+  const { t } = useI18n()
+  const [prefs, setPrefs] = useState<UserPrefs | null>(null)
+  const [url, setUrl] = useState('')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<
+    { ok: true; ip?: string; ms?: number } | { ok: false; error: string } | null
+  >(null)
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  useEffect(() => {
+    window.api.prefs.get().then((p) => {
+      setPrefs(p)
+      if (p.proxy) {
+        setUrl(p.proxy.url ?? '')
+        setUsername(p.proxy.username ?? '')
+        setPassword(p.proxy.password ?? '')
+      }
+    })
+  }, [])
+
+  if (!prefs) return null
+
+  const enabled = prefs.proxy?.enabled === true
+  const showForm = enabled || !!prefs.proxy?.url
+
+  const toggle = async () => {
+    if (!enabled) {
+      const updated: UserPrefs = {
+        ...prefs,
+        proxy: {
+          enabled: true,
+          url: prefs.proxy?.url ?? '',
+          username: prefs.proxy?.username,
+          password: prefs.proxy?.password
+        }
+      }
+      setPrefs(updated)
+      return
+    }
+    setSaving(true)
+    const updated: UserPrefs = {
+      ...prefs,
+      proxy: prefs.proxy ? { ...prefs.proxy, enabled: false } : undefined
+    }
+    const r = await window.api.prefs.save(updated)
+    if (r.ok) setPrefs(updated)
+    setSaving(false)
+  }
+
+  const runTest = async () => {
+    const trimmed = url.trim()
+    if (!trimmed) {
+      setTestResult({ ok: false, error: t('security.proxy.urlRequired') })
+      return
+    }
+    setTesting(true)
+    setTestResult(null)
+    const r = await window.api.proxy.test({
+      url: trimmed,
+      username: username || undefined,
+      password: password || undefined
+    })
+    setTesting(false)
+    if (r.ok) {
+      setTestResult({ ok: true, ip: r.ip, ms: r.latencyMs })
+    } else {
+      setTestResult({ ok: false, error: r.error ?? t('security.proxy.testFail') })
+    }
+  }
+
+  const save = async () => {
+    setSaveMsg(null)
+    const trimmed = url.trim()
+    if (enabled && !trimmed) {
+      setSaveMsg({ ok: false, text: t('security.proxy.urlRequired') })
+      return
+    }
+    if (enabled && trimmed && !/^https?:\/\//i.test(trimmed)) {
+      setSaveMsg({ ok: false, text: t('security.proxy.urlInvalid') })
+      return
+    }
+    setSaving(true)
+    const updated: UserPrefs = {
+      ...prefs,
+      proxy: {
+        enabled,
+        url: trimmed,
+        username: username || undefined,
+        password: password || undefined
+      }
+    }
+    const r = await window.api.prefs.save(updated)
+    setSaving(false)
+    if (r.ok) {
+      setPrefs(updated)
+      setSaveMsg({ ok: true, text: t('security.proxy.saved') })
+    } else {
+      setSaveMsg({ ok: false, text: t('security.proxy.saveFail') })
+    }
+  }
+
+  return (
+    <GlassCard className={cn('p-5', enabled && 'border-accent/30')}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Globe size={16} className={enabled ? 'text-accent' : 'text-fg-muted'} />
+          <div>
+            <h3 className="text-sm font-semibold text-fg">{t('security.proxy')}</h3>
+            <p className="text-xs text-fg-muted mt-0.5">
+              {t('security.proxy.desc')}
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          onClick={toggle}
+          disabled={saving}
+          className={cn(
+            'rounded-full relative transition-colors disabled:opacity-60',
+            enabled ? 'bg-accent' : 'bg-white/[0.12]'
+          )}
+          style={{ width: 40, height: 22 }}
+        >
+          <span
+            className="absolute rounded-full bg-white shadow transition-all"
+            style={{
+              width: 18,
+              height: 18,
+              top: 2,
+              left: enabled ? 20 : 2
+            }}
+          />
+        </button>
+      </div>
+
+      {showForm && (
+        <div className={cn('mt-4 space-y-3', !enabled && 'opacity-60')}>
+          <Row label={t('security.proxy.url')}>
+            <Input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder={t('security.proxy.urlPlaceholder')}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </Row>
+          <Row label={t('security.proxy.username')}>
+            <Input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </Row>
+          <Row label={t('security.proxy.password')}>
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
+            />
+          </Row>
+
+          {testResult && testResult.ok && (
+            <div className="text-xs text-accent">
+              {t('security.proxy.testOk')
+                .replace('{ip}', testResult.ip ?? '?')
+                .replace('{ms}', String(testResult.ms ?? 0))}
+            </div>
+          )}
+          {testResult && !testResult.ok && (
+            <div className="text-xs text-danger">{testResult.error}</div>
+          )}
+          {saveMsg && (
+            <div className={cn('text-xs', saveMsg.ok ? 'text-accent' : 'text-danger')}>
+              {saveMsg.text}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 justify-end">
+            <Button
+              variant="secondary"
+              onClick={runTest}
+              disabled={testing || saving}
+              className="h-9 px-3 text-xs"
+            >
+              {testing && <Loader2 size={12} className="animate-spin" />}
+              {testing ? t('security.proxy.testing') : t('security.proxy.test')}
+            </Button>
+            <Button
+              variant="primary"
+              onClick={save}
+              disabled={saving || testing}
+              className="h-9 px-3 text-xs"
+            >
+              {saving ? t('security.proxy.saving') : t('security.proxy.save')}
+            </Button>
+          </div>
+        </div>
+      )}
+    </GlassCard>
   )
 }
 
