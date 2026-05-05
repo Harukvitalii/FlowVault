@@ -1,6 +1,6 @@
 {
   "name": "flowvault",
-  "version": "1.0.0-beta",
+  "version": "1.0.0",
   "private": true,
   "description": "Manage withdrawals across CEX exchanges and crypto wallets. Local-first, AES-256-GCM encrypted vault.",
   "license": "MIT",
