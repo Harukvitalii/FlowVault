@@ -219,8 +219,9 @@ function build(accountId: string): Exchange {
   // its own https-proxy-agent on first request when these are set.
   const proxyUri = getProxyUri()
   if (proxyUri) {
-    ;(client as unknown as { httpsProxy: string; httpProxy: string }).httpsProxy = proxyUri
-    ;(client as unknown as { httpsProxy: string; httpProxy: string }).httpProxy = proxyUri
+    // ccxt rejects multiple proxy fields set at once ("conflicting proxy
+    // settings"). Exchange endpoints are all HTTPS, so httpsProxy suffices.
+    ;(client as unknown as { httpsProxy: string }).httpsProxy = proxyUri
   }
   return client
 }
