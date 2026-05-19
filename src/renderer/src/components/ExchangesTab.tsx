@@ -378,17 +378,26 @@ function ExchangeForm({
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
+  const isEdit = !!accountId
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
     setBusy(true)
+    const cleanedKey = sanitizeAddressInput(apiKey)
+    const cleanedSecret = sanitizeAddressInput(secret)
+    const cleanedPass = sanitizeAddressInput(passphrase)
     const r = await window.api.exchanges.upsert({
       accountId,
       exchange,
       label,
-      apiKey: sanitizeAddressInput(apiKey),
-      secret: sanitizeAddressInput(secret),
-      passphrase: requiresPassphrase ? sanitizeAddressInput(passphrase) : undefined
+      // On edit, only send creds that were actually re-entered; blank = keep existing.
+      apiKey: !isEdit || cleanedKey ? cleanedKey : undefined,
+      secret: !isEdit || cleanedSecret ? cleanedSecret : undefined,
+      passphrase: requiresPassphrase
+        ? !isEdit || cleanedPass
+          ? cleanedPass
+          : undefined
+        : undefined
     })
     setBusy(false)
     if (!r.ok) setError(r.error ?? 'Failed')
@@ -408,31 +417,34 @@ function ExchangeForm({
           autoFocus
         />
       </Row>
-      <Row label={accountId ? 'API key (re-enter)' : 'API key'}>
+      <Row label={isEdit ? 'API key (optional)' : 'API key'}>
         <Input
           mono
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
           autoComplete="off"
+          placeholder={isEdit ? 'Leave blank to keep existing' : undefined}
         />
       </Row>
-      <Row label={accountId ? 'Secret (re-enter)' : 'Secret'}>
+      <Row label={isEdit ? 'Secret (optional)' : 'Secret'}>
         <Input
           mono
           type="password"
           value={secret}
           onChange={(e) => setSecret(e.target.value)}
           autoComplete="new-password"
+          placeholder={isEdit ? 'Leave blank to keep existing' : undefined}
         />
       </Row>
       {requiresPassphrase && (
-        <Row label="Passphrase">
+        <Row label={isEdit ? 'Passphrase (optional)' : 'Passphrase'}>
           <Input
             mono
             type="password"
             value={passphrase}
             onChange={(e) => setPassphrase(e.target.value)}
             autoComplete="new-password"
+            placeholder={isEdit ? 'Leave blank to keep existing' : undefined}
           />
         </Row>
       )}

@@ -366,17 +366,23 @@ export async function upsertExchange(
 ): Promise<{ ok: boolean; error?: string; accountId?: string }> {
   assertUnlocked()
   if (!input.label.trim()) return { ok: false, error: 'label required' }
-  if (!input.apiKey.trim() || !input.secret.trim())
-    return { ok: false, error: 'api key and secret required' }
-  if (needsPassphrase(input.exchange) && !input.passphrase?.trim())
-    return {
-      ok: false,
-      error: `${input.exchange} requires a passphrase`
-    }
 
   const existing = input.accountId
     ? unlockedData!.exchanges[input.accountId]
     : null
+
+  // On edit, blank api key/secret/passphrase means "keep existing".
+  const apiKey = input.apiKey?.trim() || existing?.apiKey || ''
+  const secret = input.secret?.trim() || existing?.secret || ''
+  const passphrase = input.passphrase?.trim() || existing?.passphrase
+
+  if (!apiKey || !secret)
+    return { ok: false, error: 'api key and secret required' }
+  if (needsPassphrase(input.exchange) && !passphrase)
+    return {
+      ok: false,
+      error: `${input.exchange} requires a passphrase`
+    }
 
   // Prevent duplicate labels within same exchange.
   const duplicate = Object.values(unlockedData!.exchanges).some(
@@ -393,9 +399,9 @@ export async function upsertExchange(
     accountId,
     exchange: input.exchange,
     label: input.label.trim(),
-    apiKey: input.apiKey.trim(),
-    secret: input.secret.trim(),
-    passphrase: input.passphrase?.trim() || undefined,
+    apiKey,
+    secret,
+    passphrase,
     createdAt: existing?.createdAt ?? Date.now()
   }
   await persist()

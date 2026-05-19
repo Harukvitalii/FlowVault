@@ -321,8 +321,8 @@ app.whenReady().then(async () => {
     const validated: ExchangeAccountInput = {
       exchange: str(o.exchange) as ExchangeAccountInput['exchange'],
       label: str(o.label),
-      apiKey: str(o.apiKey),
-      secret: str(o.secret),
+      apiKey: typeof o.apiKey === 'string' && o.apiKey ? o.apiKey : undefined,
+      secret: typeof o.secret === 'string' && o.secret ? o.secret : undefined,
       passphrase: typeof o.passphrase === 'string' ? o.passphrase : undefined,
       accountId: typeof o.accountId === 'string' ? o.accountId : undefined
     }

@@ -280,8 +280,9 @@ export interface ExchangeAccountInput {
   accountId?: string
   exchange: ExchangeId
   label: string
-  apiKey: string
-  secret: string
+  /** Optional on edit — blank means keep the existing key. Required on create. */
+  apiKey?: string
+  secret?: string
   passphrase?: string
 }
 
